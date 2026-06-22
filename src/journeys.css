@@ -1,0 +1,135 @@
+/* Phase 0 prototype chrome — builds on the design tokens in style.css */
+
+.proto-ribbon {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: var(--s3);
+  background: var(--brand-strong); color: #fff;
+  padding: 8px 16px; font-size: 13.5px;
+}
+.proto-ribbon .tag {
+  background: oklch(1 0 0 / 0.18); padding: 2px 10px; border-radius: 999px; font-weight: 600;
+}
+.proto-ribbon .spacer { flex: 1; }
+.proto-ribbon button {
+  background: oklch(1 0 0 / 0.15); color: #fff; border: none;
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+}
+.proto-ribbon button:hover { background: oklch(1 0 0 / 0.28); }
+
+/* period chip (always visible) */
+.period-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-tint); color: var(--brand-ink);
+  border-radius: 999px; padding: 7px 14px; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent; width: 100%; justify-content: center;
+}
+.period-chip:hover { border-color: var(--brand); }
+
+/* full-screen focused overlay for wizards */
+.overlay-wrap {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: var(--bg); overflow-y: auto;
+}
+.overlay-bar {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: var(--s3);
+  background: var(--surface); border-bottom: 1px solid var(--line);
+  padding: 12px 18px;
+}
+.overlay-bar .ob-title { font-weight: 700; }
+.overlay-bar .spacer { flex: 1; }
+
+.proto-screen { max-width: 760px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+.proto-wide { max-width: 1180px; }
+
+/* stepper */
+.stepper { display: flex; gap: var(--s2); margin-bottom: var(--s6); flex-wrap: wrap; }
+.stepper .step {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: var(--ink-muted);
+}
+.stepper .dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  background: var(--surface-2); color: var(--ink-muted); border: 1px solid var(--line);
+  flex-shrink: 0;
+  transition: background 240ms var(--ease), color 240ms var(--ease), border-color 240ms var(--ease);
+}
+.stepper .step.active .dot { background: var(--brand); color: #fff; border-color: var(--brand); }
+.stepper .step.done .dot { background: var(--good); color: #fff; border-color: var(--good); }
+.stepper .step.active { color: var(--ink); font-weight: 700; }
+.stepper .sep { flex: 1; min-width: 8px; height: 1px; background: var(--line); align-self: center; }
+
+/* big choice tiles (welcome, two-path) */
+.choice-grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.choice {
+  text-align: left; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: var(--s5); box-shadow: var(--shadow-sm);
+  transition: transform 150ms var(--ease), box-shadow 150ms var(--ease), border-color 150ms var(--ease);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.choice:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--brand); }
+.choice .ico { font-size: 34px; }
+.choice .t { font-size: 18px; font-weight: 700; }
+.choice .d { color: var(--ink-muted); font-size: 14.5px; }
+.choice .rec { align-self: flex-start; margin-top: 4px; font-size: 12.5px; font-weight: 700;
+  color: var(--brand-ink); background: var(--brand-tint); padding: 2px 10px; border-radius: 999px; }
+
+/* hero / centered intro */
+.proto-hero { text-align: center; padding: var(--s6) 0; }
+.proto-hero .big { font-size: 56px; margin-bottom: var(--s3); }
+.proto-hero h1 { font-size: 32px; margin-bottom: var(--s3); }
+.proto-hero p { color: var(--ink-muted); max-width: 52ch; margin: 0 auto var(--s5); }
+
+/* wizard footer */
+.wiz-foot { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s6); }
+.wiz-foot .spacer { flex: 1; }
+
+/* callout boxes */
+.callout { border-radius: var(--r); padding: var(--s4) var(--s5); margin: var(--s4) 0; font-size: 15.5px; }
+.callout.info { background: var(--brand-tint); color: var(--brand-ink); }
+.callout.good { background: var(--good-tint); color: var(--good); }
+.callout.warn { background: var(--warn-tint); color: var(--warn); }
+.callout.bad { background: var(--bad-tint); color: var(--bad); }
+.callout .ct { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+
+/* what-next bar at success screens */
+.whatnext { display: flex; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s5); }
+
+/* inline measure row */
+.mrow { display: grid; grid-template-columns: 1fr 96px 96px 120px; gap: var(--s3); align-items: center;
+  padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.mrow.head { color: var(--ink-muted); font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.mrow input { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.mrow .nm { font-weight: 600; }
+@media (max-width: 560px) {
+  .mrow { grid-template-columns: 1fr 70px 70px; }
+  .mrow .st { display: none; }
+}
+
+/* filename chip */
+.file-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px; font-size: 14.5px; font-weight: 600;
+}
+
+/* success check */
+.success-check {
+  width: 72px; height: 72px; border-radius: 50%; background: var(--good-tint); color: var(--good);
+  display: grid; place-items: center; font-size: 38px; margin: 0 auto var(--s4);
+  animation: check-pop 440ms var(--ease) both;
+}
+
+/* simple summary list */
+.sum { list-style: none; padding: 0; margin: var(--s4) 0; }
+.sum li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.sum li b { font-weight: 700; }
+
+/* report option pills */
+.opt-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.opt {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); font-size: 14.5px; cursor: pointer;
+}
+.opt.sel { background: var(--brand-tint); border-color: var(--brand); color: var(--brand-ink); font-weight: 700; }
