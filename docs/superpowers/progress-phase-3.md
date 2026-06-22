@@ -176,3 +176,6 @@ No git in project — "complete" = files written + relevant tests green + vue-ts
 - StudentsView root widened: .container.students-wide max-width 1180 so the profile history (10 cols incl 4 separate criteria) fits without horizontal scroll.
 - MeasureView table: น้ำหนัก/ส่วนสูง input columns 72→96px (values no longer clip); min-width 920.
 - proto-wide already 1180 (measure). build ok, 175 tests.
+
+## Measure: Excel actions → top cards (2026-06-22)
+- Moved ดาวน์โหลดแม่แบบ + นำเข้าผลการวัด from bottom save bar to top action cards (with descriptions), matching StudentsView room pattern. Save bar keeps only บันทึก. build ok, 175 tests.
