@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { planPromotion, applyPromotion } from '../../src/domain/promotion/promote';
 
 describe('planPromotion', () => {
@@ -42,8 +42,8 @@ describe('planPromotion', () => {
 describe('applyPromotion', () => {
   let store: {
     students: { id: string; grade: string; room: string }[];
-    updateStudent: ReturnType<typeof vi.fn>;
-    deleteStudent: ReturnType<typeof vi.fn>;
+    updateStudent: ((id: string, patch: Record<string, string>) => void) & Mock;
+    deleteStudent: ((id: string) => void) & Mock;
   };
 
   beforeEach(() => {
