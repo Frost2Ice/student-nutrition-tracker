@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import ThaiDateField from './ThaiDateField.vue';
 import { useData } from '../stores/data';
 import { validateWeight, validateHeight, validateThaiDate, round1 } from '../domain/validation/rules';
@@ -10,7 +10,7 @@ import { aoaToXlsxBlob, measureTemplateAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
 import ImportDialog from '../components/ImportDialog.vue';
 
-defineEmits<{ done: []; exit: [] }>();
+const emit = defineEmits<{ done: []; exit: []; profile: [id: string] }>();
 const data = useData();
 
 // Two surfaces only: pick a room, then a data table for that room. No wizard.
@@ -18,7 +18,7 @@ const view = ref<'rooms' | 'table'>('rooms');
 
 const sessYear = ref(data.period.year);
 const sessTerm = ref<Term>(data.period.term as Term);
-const sessRound = ref<Round>('1');
+const sessRound = ref<Round>(data.period.round);
 const sessDate = ref(todayThai());
 
 const pickedGrade = ref('');
@@ -33,9 +33,18 @@ interface Row {
   h: string;
   origW: string;
   origH: string;
-  date: string; // stored measurement date for this round, if any
+  date: string; // measurement date for this row (editable per student)
+  origDate: string; // date as loaded, to detect date-only edits
 }
 const rows = ref<Row[]>([]);
+
+// roster for the picked room, sorted by student id (numeric-aware)
+function sortedRoom(grade: string, room: string): Student[] {
+  return data
+    .roomStudents(grade, room)
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
 
 const roomTotal = computed(() => data.roomStudents(pickedGrade.value, pickedRoom.value).length);
 function roundCount(r: Round): number {
@@ -46,7 +55,7 @@ function roundCount(r: Round): number {
 function roomMeasuredCount(grade: string, room: string): number {
   return data
     .roomStudents(grade, room)
-    .filter((s) => data.findDuplicate(s.id, sessYear.value, sessTerm.value, '1') !== null).length;
+    .filter((s) => data.findDuplicate(s.id, data.period.year, data.period.term as Term, data.period.round) !== null).length;
 }
 
 const allRooms = computed(() =>
@@ -57,11 +66,13 @@ const allRooms = computed(() =>
 
 // Load the table for the picked room + current round, prefilling existing results.
 function loadRows() {
-  rows.value = data.roomStudents(pickedGrade.value, pickedRoom.value).map((s) => {
+  rows.value = sortedRoom(pickedGrade.value, pickedRoom.value).map((s) => {
     const ex = data.findDuplicate(s.id, sessYear.value, sessTerm.value, sessRound.value);
     const w = ex ? String(ex.weightKg) : '';
     const h = ex ? String(ex.heightCm) : '';
-    return { student: s, w, h, origW: w, origH: h, date: ex ? ex.date : '' };
+    // recorded rows keep their own date; new rows default to the session date
+    const date = ex ? ex.date : sessDate.value;
+    return { student: s, w, h, origW: w, origH: h, date, origDate: ex ? ex.date : '' };
   });
 }
 
@@ -70,7 +81,7 @@ function start(grade: string, room: string) {
   pickedRoom.value = room;
   sessYear.value = data.period.year;
   sessTerm.value = data.period.term as Term;
-  sessRound.value = '1';
+  sessRound.value = data.period.round;
   sessDate.value = todayThai();
   loadRows();
   view.value = 'table';
@@ -93,7 +104,7 @@ function assess(row: Row) {
     year: sessYear.value,
     term: sessTerm.value,
     round: sessRound.value,
-    date: sessDate.value,
+    date: row.date || sessDate.value,
     weightKg: round1(w),
     heightCm: round1(h),
     savedAt: Date.now(),
@@ -113,10 +124,14 @@ function rowErr(row: Row) {
 function rowValid(row: Row) {
   const w = parseFloat(row.w);
   const h = parseFloat(row.h);
-  return !isNaN(w) && !isNaN(h) && !validateWeight(round1(w)) && !validateHeight(round1(h));
+  return (
+    !isNaN(w) && !isNaN(h) &&
+    !validateWeight(round1(w)) && !validateHeight(round1(h)) &&
+    !validateThaiDate(row.date, false)
+  );
 }
 function rowDirty(row: Row) {
-  return rowValid(row) && (row.w !== row.origW || row.h !== row.origH);
+  return rowValid(row) && (row.w !== row.origW || row.h !== row.origH || row.date !== row.origDate);
 }
 function isRecorded(row: Row) {
   return row.origW !== '' && row.origH !== '';
@@ -127,7 +142,6 @@ const dirtyCount = computed(() => rows.value.filter((r) => rowDirty(r)).length);
 const dateError = computed(() => validateThaiDate(sessDate.value, false));
 
 function save() {
-  if (dateError.value) return;
   let n = 0;
   for (const r of rows.value) {
     if (!rowDirty(r)) continue;
@@ -136,7 +150,7 @@ function save() {
       year: sessYear.value,
       term: sessTerm.value,
       round: sessRound.value,
-      date: sessDate.value,
+      date: r.date || sessDate.value,
       weightKg: round1(parseFloat(r.w)),
       heightCm: round1(parseFloat(r.h)),
       gradeAtMeasure: r.student.grade,
@@ -168,6 +182,30 @@ function onImported(r: { added: number; updated: number }) {
 const sessDateYearMin = computed(() => +sessYear.value - 1);
 const sessDateYearMax = computed(() => +sessYear.value + 1);
 
+// Session date is the default for new entries; propagate to not-yet-recorded rows.
+watch(sessDate, (d) => {
+  for (const r of rows.value) if (r.origDate === '') r.date = d;
+});
+
+function goProfile(id: string) {
+  emit('profile', id);
+}
+
+// Mirror the round tabs + default date into the sticky footer, but only once
+// the top toolbar has scrolled out of view (avoids duplicate controls on screen).
+const tbarEl = ref<HTMLElement | null>(null);
+const tbarOffscreen = ref(false);
+let io: IntersectionObserver | null = null;
+watch(tbarEl, (el) => {
+  io?.disconnect();
+  tbarOffscreen.value = false;
+  if (el) {
+    io = new IntersectionObserver(([e]) => { tbarOffscreen.value = !e.isIntersecting; }, { threshold: 0 });
+    io.observe(el);
+  }
+});
+onBeforeUnmount(() => io?.disconnect());
+
 const wfhClass: Record<string, string> = {
   ผอม: 'bad', ค่อนข้างผอม: 'warn', สมส่วน: 'good', ท้วม: 'warn', เริ่มอ้วน: 'warn', อ้วน: 'bad',
 };
@@ -181,7 +219,7 @@ const hfaClass: Record<string, string> = {
 </script>
 
 <template>
-  <div class="proto-screen proto-wide">
+  <div class="proto-screen proto-wide" :class="{ 'proto-xwide': view === 'table' }">
     <!-- ===== room list ===== -->
     <template v-if="view === 'rooms'">
       <h1 class="page-title">บันทึกการวัด</h1>
@@ -194,7 +232,7 @@ const hfaClass: Record<string, string> = {
         </div>
       </div>
       <div v-else class="panel" style="padding: 0">
-        <div class="mrow head" style="grid-template-columns: 1.4fr 1fr auto"><div>ห้อง</div><div>สถานะ (ครั้งที่ 1)</div><div></div></div>
+        <div class="mrow head" style="grid-template-columns: 1.4fr 1fr auto"><div>ห้อง</div><div>สถานะ (ครั้งที่ {{ data.period.round }})</div><div></div></div>
         <button
           v-for="c in allRooms"
           :key="c.grade + c.room"
@@ -219,7 +257,7 @@ const hfaClass: Record<string, string> = {
       <p class="page-sub">ปีการศึกษา {{ sessYear }} · ภาคเรียน {{ sessTerm }} · {{ roomTotal }} คน — กรอกหรือแก้ไขได้ในตาราง</p>
 
       <!-- round selector (tabs, not dropdown) + measure date -->
-      <div class="tbar">
+      <div ref="tbarEl" class="tbar">
         <div class="round-tabs" role="tablist">
           <button
             v-for="r in (['1','2'] as Round[])"
@@ -236,7 +274,7 @@ const hfaClass: Record<string, string> = {
         </div>
         <span class="spacer"></span>
         <label class="date-inline" :class="{ invalid: sessDate && dateError }">
-          <span class="date-lbl">วันที่วัด</span>
+          <span class="date-lbl">วันที่วัด (ค่าเริ่มต้น)</span>
           <ThaiDateField v-model="sessDate" :year-min="sessDateYearMin" :year-max="sessDateYearMax" />
         </label>
       </div>
@@ -244,7 +282,7 @@ const hfaClass: Record<string, string> = {
 
       <!-- Excel actions in context, at the top, with descriptions -->
       <div class="room-actions">
-        <button class="act-card" :disabled="!!dateError" @click="importOpen = true">
+        <button class="act-card" @click="importOpen = true">
           <span class="act-ico">📥</span>
           <span class="act-body">
             <span class="act-title">นำเข้าผลการวัด</span>
@@ -269,23 +307,26 @@ const hfaClass: Record<string, string> = {
       <!-- data table: existing values prefilled + 4 criteria in separate columns -->
       <div class="panel tbl-scroll" style="padding: 0">
         <div class="mrow head measure-grid">
-          <div>นักเรียน</div><div>น้ำหนัก</div><div>ส่วนสูง</div>
-          <div>น้ำหนัก/อายุ</div><div>ส่วนสูง/อายุ</div><div>น้ำหนัก/ส่วนสูง</div><div>สูงดีสมส่วน</div>
+          <div>รหัส</div><div>ชื่อ-สกุล</div><div>น้ำหนัก</div><div>ส่วนสูง</div><div>วันที่วัด</div>
+          <div>น้ำหนัก/อายุ</div><div>ส่วนสูง/อายุ</div><div>น้ำหนัก/ส่วนสูง</div><div>สูงดีสมส่วน</div><div>ประวัติ</div>
         </div>
         <div v-for="r in rows" :key="r.student.id" class="mrow datarow measure-grid">
-          <div>
-            <div class="nm">
-              {{ r.student.firstName }} {{ r.student.lastName }}
-              <span v-if="isRecorded(r)" class="rec-tag">✓ วัดแล้ว</span>
-            </div>
-            <div style="font-size: 12.5px; color: var(--ink-muted)">
-              รหัส {{ r.student.id }}<template v-if="r.date"> · วัดเมื่อ {{ r.date }}</template>
-            </div>
-            <div v-if="rowErr(r).w" class="err" style="font-size: 12px">{{ rowErr(r).w }}</div>
-            <div v-if="rowErr(r).h" class="err" style="font-size: 12px">{{ rowErr(r).h }}</div>
+          <div class="c-id">{{ r.student.id }}</div>
+          <div class="c-name">
+            <span class="nm">{{ r.student.firstName }} {{ r.student.lastName }}</span>
+            <span v-if="isRecorded(r)" class="rec-tag">✓ วัดแล้ว</span>
           </div>
-          <input v-model="r.w" type="number" step="0.1" inputmode="decimal" placeholder="กก." :class="{ dirty: rowDirty(r) }" />
-          <input v-model="r.h" type="number" step="0.1" inputmode="decimal" placeholder="ซม." :class="{ dirty: rowDirty(r) }" />
+          <div class="c-num">
+            <input v-model="r.w" type="number" step="0.1" inputmode="decimal" placeholder="กก." :class="{ dirty: rowDirty(r) }" />
+            <div v-if="rowErr(r).w" class="err">{{ rowErr(r).w }}</div>
+          </div>
+          <div class="c-num">
+            <input v-model="r.h" type="number" step="0.1" inputmode="decimal" placeholder="ซม." :class="{ dirty: rowDirty(r) }" />
+            <div v-if="rowErr(r).h" class="err">{{ rowErr(r).h }}</div>
+          </div>
+          <div class="c-date">
+            <ThaiDateField v-model="r.date" :year-min="sessDateYearMin" :year-max="sessDateYearMax" />
+          </div>
           <template v-if="assess(r)">
             <div><span class="pill" :class="wfaClass[assess(r)!.wfa]">{{ assess(r)!.wfa }}</span></div>
             <div><span class="pill" :class="hfaClass[assess(r)!.hfa]">{{ assess(r)!.hfa }}</span></div>
@@ -295,14 +336,40 @@ const hfaClass: Record<string, string> = {
           <template v-else>
             <div class="empty-c">—</div><div class="empty-c">—</div><div class="empty-c">—</div><div class="empty-c">—</div>
           </template>
+          <div class="c-hist">
+            <button class="hist-link" type="button" title="ดูประวัตินักเรียน" @click="goProfile(r.student.id)">ประวัติ →</button>
+          </div>
         </div>
       </div>
 
-      <!-- sticky save bar -->
+      <!-- sticky save bar — also mirrors round tabs + date once the top bar is offscreen -->
       <div class="save-bar">
+        <template v-if="tbarOffscreen">
+          <div class="round-tabs round-tabs-sm" role="tablist">
+            <button
+              v-for="r in (['1','2'] as Round[])"
+              :key="r"
+              class="round-tab"
+              :class="{ on: sessRound === r }"
+              role="tab"
+              :aria-selected="sessRound === r"
+              @click="changeRound(r)"
+            >
+              ครั้งที่ {{ r }}
+              <span class="rt-count" :class="roundCount(r) === roomTotal && roomTotal > 0 ? 'good' : roundCount(r) === 0 ? 'neutral' : 'warn'">{{ roundCount(r) }}/{{ roomTotal }}</span>
+            </button>
+          </div>
+          <label class="date-inline date-inline-sm" :class="{ invalid: sessDate && dateError }">
+            <span class="date-lbl">วันที่ (ค่าเริ่มต้น)</span>
+            <ThaiDateField v-model="sessDate" :year-min="sessDateYearMin" :year-max="sessDateYearMax" />
+          </label>
+        </template>
+        <span v-else class="save-hint">
+          {{ dirtyCount > 0 ? `มีการแก้ไข ${dirtyCount} รายการที่ยังไม่บันทึก` : 'บันทึกผลครบแล้ว' }}
+        </span>
         <span class="spacer"></span>
-        <button class="btn primary lg" :disabled="dirtyCount === 0 || !!dateError" @click="save">
-          {{ dirtyCount > 0 ? `บันทึก ${dirtyCount} รายการ` : 'บันทึกแล้ว' }}
+        <button class="btn-save" :disabled="dirtyCount === 0" @click="save">
+          {{ dirtyCount > 0 ? `บันทึก ${dirtyCount} รายการ` : '✓ บันทึกแล้ว' }}
         </button>
       </div>
     </template>
@@ -370,31 +437,70 @@ const hfaClass: Record<string, string> = {
 .act-title { font-weight: 700; color: var(--ink); }
 .act-desc { font-size: 13px; color: var(--ink-muted); line-height: 1.4; }
 
-/* measurement table: name + 2 inputs + 4 separate criteria columns */
+/* wider canvas for the data table */
+.proto-xwide { max-width: 1340px; }
+
+/* measurement table: each value in its own column */
 .tbl-scroll { overflow-x: auto; }
 .measure-grid {
-  grid-template-columns: minmax(132px, 1.1fr) 96px 96px 1fr 1fr 1fr minmax(104px, 0.95fr);
-  min-width: 920px;
+  grid-template-columns:
+    72px              /* รหัส */
+    minmax(150px, 1.4fr) /* ชื่อ-สกุล */
+    88px 88px         /* น้ำหนัก / ส่วนสูง */
+    210px             /* วันที่วัด */
+    1fr 1fr 1fr minmax(104px, 0.95fr) /* 4 criteria */
+    84px;             /* ประวัติ */
+  min-width: 1180px;
   align-items: center;
+  column-gap: var(--s3);
 }
 .measure-grid > div { min-width: 0; }
+
+.c-id { font-family: monospace; font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.c-name { display: flex; flex-direction: column; gap: 3px; }
+.c-name .nm { font-weight: 600; }
+.c-num { display: flex; flex-direction: column; gap: 3px; }
+.c-num input { width: 100%; }
+.c-date :deep(.thai-date-field) { flex-wrap: wrap; }
+.c-hist { text-align: right; }
+.hist-link {
+  border: 1px solid var(--line); background: var(--surface); color: var(--brand-ink);
+  font-weight: 600; font-size: 12.5px; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  white-space: nowrap; transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+.hist-link:hover { border-color: var(--brand); background: var(--brand-tint); }
+
 /* allow long criterion labels to wrap inside their column instead of overflowing */
 .measure-grid .pill { white-space: normal; max-width: 100%; align-items: flex-start; }
 .measure-grid .pill::before { margin-top: 5px; }
 .empty-c { color: var(--ink-muted); text-align: center; }
-.datarow input { width: 100%; }
 .datarow input.dirty { border-color: var(--brand); background: var(--brand-tint); }
-.st .pill { animation: pop-in 200ms var(--ease) both; }
-.rec-tag { font-size: 11.5px; font-weight: 600; color: var(--good); background: var(--good-tint); padding: 1px 8px; border-radius: 999px; }
-.err { color: var(--bad); }
+.rec-tag { font-size: 11px; font-weight: 600; color: var(--good); background: var(--good-tint); padding: 1px 8px; border-radius: 999px; white-space: nowrap; align-self: flex-start; }
+.err { color: var(--bad); font-size: 12px; line-height: 1.3; }
 
-/* sticky save bar */
+/* save bar: solid footer, saturated primary */
 .save-bar {
   position: sticky; bottom: 0; z-index: 5;
-  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
-  margin-top: var(--s4); padding: var(--s3) 0;
-  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s4); padding: var(--s3) var(--s4);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--rounded-md, 16px);
+  box-shadow: 0 -6px 18px rgba(20, 30, 35, 0.06);
 }
+.save-bar .save-hint { font-size: 13.5px; color: var(--ink-muted); }
+/* compact mirrored controls in the footer */
+.round-tabs-sm { padding: 3px; }
+.round-tabs-sm .round-tab { padding: 6px 12px; font-size: 14px; }
+.date-inline-sm { flex-direction: row; align-items: center; gap: 8px; }
+.date-inline-sm .date-lbl { white-space: nowrap; }
+.btn-save {
+  border: none; border-radius: 12px; cursor: pointer;
+  padding: 12px 28px; font-size: 16px; font-weight: 700; color: #fff;
+  background: var(--brand-strong); box-shadow: 0 4px 12px oklch(0.55 0.16 200 / 0.35);
+  transition: transform 120ms var(--ease), box-shadow 120ms var(--ease), background 120ms var(--ease);
+}
+.btn-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px oklch(0.55 0.16 200 / 0.45); }
+.btn-save:active:not(:disabled) { transform: translateY(0); }
+.btn-save:disabled { background: var(--surface-2); color: var(--ink-muted); cursor: not-allowed; box-shadow: none; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
