@@ -22,6 +22,13 @@ const restoreInput = ref<HTMLInputElement | null>(null);
 const dest = ref<Dest>('home');
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
+const focusStudent = ref<string | null>(null);
+
+function goProfile(id: string) {
+  focusStudent.value = id;
+  dest.value = 'students';
+  window.scrollTo({ top: 0 });
+}
 
 function pickRestoreFile() {
   restoreInput.value?.click();
@@ -147,8 +154,8 @@ const periodShort = computed(
       <main class="content">
         <Transition name="view" mode="out-in">
           <HomeView v-if="dest === 'home'" key="home" @go="go" />
-          <StudentsView v-else-if="dest === 'students'" key="students" @go="go" />
-          <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
+          <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" @go="go" @focused="focusStudent = null" />
+          <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" @profile="goProfile" />
           <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="dest === 'reports'" key="reports" />
           <div v-else class="container" :key="dest">

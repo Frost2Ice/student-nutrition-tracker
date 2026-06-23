@@ -13,7 +13,8 @@ import { downloadBlob } from './download';
 import { printHtml } from './print';
 import ImportDialog from '../components/ImportDialog.vue';
 
-defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }] }>();
+const props = defineProps<{ focusId?: string | null }>();
+const emit = defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }]; focused: [] }>();
 
 const data = useData();
 
@@ -64,6 +65,24 @@ const roomRiskCount = computed(() =>
   grade.value && room.value
     ? data.roomStudents(grade.value, room.value).filter((s) => statusOf(s).risk).length
     : 0,
+);
+
+// Open a student's profile directly when navigated here with a focus id
+// (e.g. from the measurement page). Consume once, then notify parent to clear.
+watch(
+  () => props.focusId,
+  (id) => {
+    if (!id) return;
+    const s = data.findStudent(id);
+    if (s) {
+      grade.value = s.grade;
+      room.value = s.room;
+      level.value = 'students';
+      open.value = s;
+    }
+    emit('focused');
+  },
+  { immediate: true },
 );
 
 function openGrade(g: string) { grade.value = g; level.value = 'rooms'; }
