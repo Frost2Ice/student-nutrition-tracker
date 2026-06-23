@@ -380,13 +380,14 @@ describe('parseMeasureImport', () => {
   ];
 
   const noDup = () => false;
+  const ctx = { grade: 'ป.1', room: '1' };
 
   it('clean row → status ok, measure built, counts ok=1', () => {
     const aoa = [
       [...MEASURE_HEADERS],
       ['10001', '22.5', '120', '15/6/2567'],
     ];
-    const { rows, counts } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows, counts } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('ok');
     expect(rows[0].rowNum).toBe(2);
@@ -405,7 +406,7 @@ describe('parseMeasureImport', () => {
       [...MEASURE_HEADERS],
       ['10001', '999', '120', '15/6/2567'],
     ];
-    const { rows, counts } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows, counts } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(rows[0].status).toBe('error');
     expect(rows[0].rowNum).toBe(2);
     expect(rows[0].measure).toBeNull();
@@ -419,11 +420,24 @@ describe('parseMeasureImport', () => {
       [...MEASURE_HEADERS],
       ['99999', '22.5', '120', '15/6/2567'],
     ];
-    const { rows } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(rows[0].status).toBe('error');
     expect(rows[0].name).toBe('');
     const msgs = rows[0].issues.map(i => i.message);
     expect(msgs).toContain('ไม่พบรหัสนักเรียนนี้ในระบบ');
+  });
+
+  it('student from a different classroom → status error (tied to selected room)', () => {
+    // 10002 is ป.2/1 but ctx is ป.1/1 → must be rejected
+    const aoa = [
+      [...MEASURE_HEADERS],
+      ['10002', '22.5', '120', '15/6/2567'],
+    ];
+    const { rows } = parseMeasureImport(aoa, period, students, noDup, ctx);
+    expect(rows[0].status).toBe('error');
+    expect(rows[0].measure).toBeNull();
+    const msgs = rows[0].issues.map(i => i.message);
+    expect(msgs.some(m => m.includes('ไม่ใช่ห้องที่เลือก'))).toBe(true);
   });
 
   it('CE/Excel-style date auto-converts to BE → status ok + warn ปรับรูปแบบวันที่ให้อัตโนมัติ', () => {
@@ -432,7 +446,7 @@ describe('parseMeasureImport', () => {
       [...MEASURE_HEADERS],
       ['10001', '22.5', '120', '15/6/2024'],
     ];
-    const { rows } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(rows[0].status).toBe('ok');
     const warns = rows[0].issues.filter(i => i.severity === 'warn');
     expect(warns.some(w => w.message.includes('ปรับรูปแบบวันที่'))).toBe(true);
@@ -445,7 +459,7 @@ describe('parseMeasureImport', () => {
       ['10001', '22.5', '120', '15/6/2567'],
     ];
     const hasDup = (id: string) => id === '10001';
-    const { rows, counts } = parseMeasureImport(aoa, period, students, hasDup);
+    const { rows, counts } = parseMeasureImport(aoa, period, students, hasDup, ctx);
     expect(rows[0].status).toBe('update');
     expect(rows[0].measure).not.toBeNull();
     const msgs = rows[0].issues.map(i => i.message);
@@ -462,7 +476,7 @@ describe('parseMeasureImport', () => {
     ];
     // 10001 is dup → overwrite, 10002 is not
     const hasDup = (id: string) => id === '10001';
-    const { counts } = parseMeasureImport(aoa, period, students, hasDup);
+    const { counts } = parseMeasureImport(aoa, period, students, hasDup, ctx);
     expect(counts.update).toBe(2);
     expect(counts.error).toBe(1);
     expect(counts.ok).toBe(0);
@@ -474,7 +488,7 @@ describe('parseMeasureImport', () => {
       ['10001', '22.5', '120', '15/6/2567'],
       ['10001', '24.0', '121', '15/6/2567'],
     ];
-    const { rows } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows } = parseMeasureImport(aoa, period, students, noDup, ctx);
     const warned = rows.filter((r) => r.issues.some((i) => i.message.includes('ซ้ำในไฟล์')));
     expect(warned).toHaveLength(2);
     // not blocking: both still importable (ok), upsert makes the last win
@@ -487,12 +501,12 @@ describe('parseMeasureImport', () => {
       ['10001', '22.5', '120', 'bad-date'],
     ];
     // Without override → error
-    const { rows: r1 } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows: r1 } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(r1[0].status).toBe('error');
 
     // With date override → ok
     const overrides = new Map([[2, { date: '15/6/2567' }]]);
-    const { rows: r2 } = parseMeasureImport(aoa, period, students, noDup, overrides);
+    const { rows: r2 } = parseMeasureImport(aoa, period, students, noDup, ctx, overrides);
     expect(r2[0].status).toBe('ok');
   });
 
@@ -501,7 +515,7 @@ describe('parseMeasureImport', () => {
       [...MEASURE_HEADERS],
       ['', '22.5', '120', '15/6/2567'],
     ];
-    const { rows } = parseMeasureImport(aoa, period, students, noDup);
+    const { rows } = parseMeasureImport(aoa, period, students, noDup, ctx);
     expect(rows[0].status).toBe('error');
     const msgs = rows[0].issues.map(i => i.message);
     expect(msgs).toContain('ไม่มีรหัสนักเรียน');

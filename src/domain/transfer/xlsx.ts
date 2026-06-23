@@ -402,6 +402,7 @@ export function parseMeasureImport(
   period: { year: string; term: Term; round: Round },
   students: Student[],
   hasDup: (studentId: string) => boolean,
+  ctx: { grade: string; room: string },
   overrides?: Map<number, { date?: string; weight?: string; height?: string }>,
 ): { rows: MeasureImportPreviewRow[]; counts: { ok: number; update: number; error: number } } {
   const rows: MeasureImportPreviewRow[] = [];
@@ -433,10 +434,18 @@ export function parseMeasureImport(
       issues.push({ message: 'รหัสนักเรียนซ้ำในไฟล์ — ระบบจะใช้ค่าจากแถวสุดท้าย', severity: 'warn' });
     }
 
-    // student lookup
+    // student lookup — must exist AND belong to the selected classroom
     const matchedStudent = id ? students.find((s) => s.id === id) ?? null : null;
     if (id && !matchedStudent) {
       issues.push({ message: 'ไม่พบรหัสนักเรียนนี้ในระบบ', severity: 'error' });
+    } else if (
+      matchedStudent &&
+      (matchedStudent.grade !== ctx.grade || matchedStudent.room !== ctx.room)
+    ) {
+      issues.push({
+        message: `นักเรียนคนนี้อยู่ห้อง ${matchedStudent.grade}/${matchedStudent.room} ไม่ใช่ห้องที่เลือก`,
+        severity: 'error',
+      });
     }
 
     // weight

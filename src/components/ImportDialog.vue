@@ -53,7 +53,11 @@ const dobOverrides = ref(new Map<number, { dob?: string }>());
 const dateOverrides = ref(new Map<number, { date?: string; weight?: string; height?: string }>());
 const result = ref<{ added: number; updated: number } | null>(null);
 
-const title = computed(() => (props.kind === 'measure' ? 'นำเข้าผลการวัด (Excel)' : 'นำเข้ารายชื่อนักเรียน (Excel)'));
+const title = computed(() =>
+  props.kind === 'measure'
+    ? `นำเข้าผลการวัด · ครั้งที่ ${props.round}`
+    : 'นำเข้ารายชื่อนักเรียน (Excel)',
+);
 const roomLabel = computed(() => (grade.value && room.value ? `${grade.value}/${room.value}` : ''));
 const canConfirm = computed(() => counts.value.ok + counts.value.update > 0);
 
@@ -105,6 +109,7 @@ function runParse() {
       { year: props.year!, term: props.term!, round: props.round! },
       data.students,
       (id) => data.findDuplicate(id, props.year!, props.term!, props.round!) !== null,
+      { grade: grade.value, room: room.value },
       dateOverrides.value,
     );
     measureRows.value = res.rows;
@@ -230,14 +235,28 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
 
     <!-- stage: pick file — cohesive 2-step upload -->
     <div v-else-if="stage === 'pick'" class="up">
-      <div class="up-ctx">
-        <span class="up-ctx-ico">{{ kind === 'measure' ? '📏' : '👥' }}</span>
-        <div>
-          <div class="up-ctx-t">{{ kind === 'measure' ? 'นำเข้าผลการวัด' : 'นำเข้ารายชื่อนักเรียน' }} · ห้อง {{ roomLabel }}</div>
-          <div v-if="kind === 'measure'" class="up-ctx-d">ปีการศึกษา {{ year }} · ภาคเรียน {{ term }} · ครั้งที่ {{ round }}</div>
-          <div v-else class="up-ctx-d">ไฟล์ที่นำเข้าจะถูกเพิ่มเข้าห้องนี้</div>
+      <!-- measure: prominent session banner — which round is being filled -->
+      <div v-if="kind === 'measure'" class="sess">
+        <div class="sess-info">
+          <span class="sess-ico">📏</span>
+          <div>
+            <div class="sess-room">ห้อง {{ roomLabel }}</div>
+            <div class="sess-meta">ปีการศึกษา {{ year }} · ภาคเรียนที่ {{ term }}</div>
+          </div>
         </div>
-        <button v-if="kind === 'student' && !props.room" class="btn quiet up-ctx-edit" @click="stage = 'room'">เปลี่ยนห้อง</button>
+        <div class="sess-round">
+          <span class="sess-round-lbl">กำลังนำเข้าผลการวัด</span>
+          <span class="sess-round-val">ครั้งที่ {{ round }}</span>
+        </div>
+      </div>
+      <!-- student: room context -->
+      <div v-else class="up-ctx">
+        <span class="up-ctx-ico">👥</span>
+        <div>
+          <div class="up-ctx-t">นำเข้ารายชื่อนักเรียน · ห้อง {{ roomLabel }}</div>
+          <div class="up-ctx-d">ไฟล์ที่นำเข้าจะถูกเพิ่มเข้าห้องนี้</div>
+        </div>
+        <button v-if="!props.room" class="btn quiet up-ctx-edit" @click="stage = 'room'">เปลี่ยนห้อง</button>
       </div>
 
       <ol class="up-steps">
@@ -275,7 +294,10 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
     <!-- stage: preview -->
     <div v-else-if="stage === 'preview'">
       <div class="prev-head">
-        <div class="prev-file"><span>📄</span> {{ fileName }} · ห้อง {{ roomLabel }}</div>
+        <div class="prev-file">
+          <span>📄</span> {{ fileName }} · ห้อง {{ roomLabel }}
+          <span v-if="kind === 'measure'" class="prev-round">ครั้งที่ {{ round }}</span>
+        </div>
         <div class="prev-stats">
           <span class="stat ok"><b>{{ counts.ok }}</b> เพิ่มใหม่</span>
           <span class="stat upd"><b>{{ counts.update }}</b> อัปเดต</span>
@@ -375,7 +397,8 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
         <div class="success-check">✓</div>
         <h1>นำเข้าเรียบร้อย</h1>
         <p v-if="result">
-          ห้อง {{ roomLabel }} · เพิ่มใหม่ {{ result.added }} · อัปเดต {{ result.updated }}
+          ห้อง {{ roomLabel }}<template v-if="kind === 'measure'"> · ครั้งที่ {{ round }}</template> ·
+          เพิ่มใหม่ {{ result.added }} · อัปเดต {{ result.updated }}
           <template v-if="counts.error"> · ข้าม {{ counts.error }} แถวที่มีปัญหา</template>
         </p>
       </div>
@@ -391,6 +414,29 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
 .field-block { margin-bottom: var(--s4); }
 .fb-label { font-weight: 600; margin-bottom: var(--s2); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* measure session banner — round is the hero */
+.sess {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  flex-wrap: wrap;
+  background: var(--brand-tint); border-radius: 14px;
+  padding: var(--s3) var(--s4); margin-bottom: var(--s4);
+}
+.sess-info { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.sess-ico { font-size: 28px; flex-shrink: 0; }
+.sess-room { font-weight: 700; font-size: 17px; color: var(--brand-ink); }
+.sess-meta { font-size: 13px; color: var(--brand-ink); opacity: 0.75; margin-top: 1px; }
+.sess-round {
+  display: flex; flex-direction: column; align-items: flex-end; text-align: right;
+  background: var(--brand); color: #fff; border-radius: 12px;
+  padding: 8px 16px; flex-shrink: 0;
+}
+.sess-round-lbl { font-size: 11.5px; opacity: 0.85; font-weight: 600; }
+.sess-round-val { font-size: 20px; font-weight: 800; line-height: 1.1; }
+@media (max-width: 560px) {
+  .sess { flex-direction: column; align-items: stretch; }
+  .sess-round { flex-direction: row; align-items: center; justify-content: space-between; text-align: left; }
+}
 
 /* upload (pick stage) */
 .up-ctx {
@@ -429,7 +475,8 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
 
 /* preview header */
 .prev-head { margin-bottom: var(--s4); }
-.prev-file { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink-muted); margin-bottom: var(--s2); word-break: break-all; }
+.prev-file { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13.5px; color: var(--ink-muted); margin-bottom: var(--s2); word-break: break-all; }
+.prev-round { background: var(--brand); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 999px; padding: 2px 10px; }
 .prev-stats { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .stat { border-radius: 10px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; }
 .stat b { font-size: 16px; margin-right: 4px; }
