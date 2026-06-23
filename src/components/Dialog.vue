@@ -92,6 +92,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .dlg-title { font-weight: 700; font-size: 17px; }
+.dlg-bar .spacer { flex: 1 1 auto; }
 .dlg-body { overflow: auto; padding: var(--s4); }
 @media (prefers-reduced-motion: reduce) {
   .dlg[open], .dlg[open]::backdrop { animation: none; }
