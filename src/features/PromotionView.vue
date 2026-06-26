@@ -29,8 +29,17 @@ const plan = computed(() =>
   ),
 );
 
+// Effective action per student = explicit override, else plan default
+// (max-grade → graduate, otherwise promote). Single source of truth for
+// counts, the export file, and the confirm step.
+function effectiveAction(id: string): Decision['action'] {
+  const override = decisions.value[id];
+  if (override) return override.action;
+  return plan.value.graduate.some((g) => g.id === id) ? 'graduate' : 'promote';
+}
+
 const graduateStudents = computed(() =>
-  data.students.filter((s) => plan.value.graduate.some((g) => g.id === s.id)),
+  data.students.filter((s) => effectiveAction(s.id) === 'graduate'),
 );
 
 const gradeFilename = computed(
@@ -42,7 +51,7 @@ const previewRows = computed(() => {
   const gradeMap = new Map<string, { from: string; to: string; n: number; grad: boolean }>();
   for (const s of data.students) {
     const isGrad = plan.value.graduate.some((g) => g.id === s.id);
-    const to = isGrad ? 'จบการศึกษา' : s.grade; // will be promoted grade
+    const to = isGrad ? 'จบการศึกษา' : promoteGrade(s.grade);
     if (!gradeMap.has(s.grade)) {
       gradeMap.set(s.grade, { from: s.grade, to, n: 0, grad: isGrad });
     }
@@ -55,8 +64,12 @@ const previewRows = computed(() => {
   });
 });
 
-const promoteCount = computed(() => plan.value.promote.length);
-const graduateCount = computed(() => plan.value.graduate.length);
+const promoteCount = computed(
+  () => data.students.filter((s) => effectiveAction(s.id) === 'promote').length,
+);
+const graduateCount = computed(
+  () => data.students.filter((s) => effectiveAction(s.id) === 'graduate').length,
+);
 
 // Per-student override decisions map
 const decisions = ref<Record<string, Decision>>({});
@@ -111,9 +124,8 @@ const overrideList = computed(() =>
     .map((s) => ({ ...s, decision: decisions.value[s.id] })),
 );
 
-// Count repeat decisions (from explicit overrides only; default is promote, not repeat)
 const repeatCount = computed(
-  () => overrideList.value.filter((s) => s.decision.action === 'repeat').length,
+  () => data.students.filter((s) => effectiveAction(s.id) === 'repeat').length,
 );
 
 function downloadBackup() {
