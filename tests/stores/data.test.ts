@@ -40,19 +40,19 @@ describe('useData store', () => {
 
   it('period has correct defaults and can be updated via setPeriod', () => {
     const store = useData();
-    expect(store.period).toEqual({ year: '', term: '1', round: '1' });
+    expect(store.period).toEqual({ year: '' });
 
-    store.setPeriod({ year: '2567', term: '2', round: '1' });
-    expect(store.period).toEqual({ year: '2567', term: '2', round: '1' });
+    store.setPeriod({ year: '2567' });
+    expect(store.period).toEqual({ year: '2567' });
 
     // persisted to localStorage
     const stored = JSON.parse(localStorage.getItem('ntr2_period') ?? '{}');
-    expect(stored).toEqual({ year: '2567', term: '2', round: '1' });
+    expect(stored).toEqual({ year: '2567' });
   });
 
   it('structure, roomInfo, gradeInfo, roomStudents, searchStudents work correctly', () => {
     const data = useData();
-    data.setPeriod({ year: '2568', term: '1', round: '1' });
+    data.setPeriod({ year: '2568' });
 
     const s1: Parameters<typeof data.addStudent>[0] = {
       id: '1', firstName: 'คณิต', lastName: 'ดี', grade: 'ป.1', room: '1',
