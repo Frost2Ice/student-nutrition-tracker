@@ -27,9 +27,13 @@ export const useData = defineStore('data', () => {
   );
   const students = ref<Student[]>(load<Student[]>(KS, []));
   const measures = ref<Measurement[]>(load<Measurement[]>(KM, []));
-  const period = ref<{ year: string; term: Term; round: Round }>(
-    load<{ year: string; term: Term; round: Round }>(KP, { year: '', term: '1', round: '1' }),
+  const period = ref<{ year: string }>(
+    (() => {
+      const raw = load<{ year: string; term?: string; round?: string }>(KP, { year: '' });
+      return { year: raw.year ?? '' };
+    })(),
   );
+  const measureSession = ref<{ term: Term; round: Round } | null>(null);
 
   const lastBackupAt = ref<number>(load<number>(KB, 0));
 
@@ -47,7 +51,7 @@ export const useData = defineStore('data', () => {
     students: Student[];
     measures: Measurement[];
     setup: Setup;
-    period: { year: string; term: Term; round: Round };
+    period: { year: string };
     classrooms?: { grade: string; rooms: string[] }[];
   }) {
     students.value = parsed.students;
@@ -110,7 +114,7 @@ export const useData = defineStore('data', () => {
     });
   }
 
-  function setPeriod(p: { year: string; term: Term; round: Round }) {
+  function setPeriod(p: { year: string }) {
     period.value = p;
     persist();
   }
@@ -300,6 +304,7 @@ export const useData = defineStore('data', () => {
     measures,
     setup,
     period,
+    measureSession,
     lastBackupAt,
     backupOverdueDays,
     markBackup,

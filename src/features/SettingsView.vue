@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { useData } from '../stores/data';
 import { serializeBackup, parseBackup } from '../domain/transfer/backup';
 import { gradesUpTo } from '../domain/grade/ladder';
-import type { Setup, Term, Round } from '../domain/types';
+import type { Setup } from '../domain/types';
 
 const emit = defineEmits<{ go: [tab: string] }>();
 
@@ -34,16 +34,11 @@ const backupLabel = computed(() => {
   return `เก็บล่าสุด ${d} วันก่อน`;
 });
 
-// --- academic-year context: latest round + measure date + this-round count ---
+// --- academic-year context: latest measure date ---
 const latestMeasure = computed(() => {
   if (!data.measures.length) return null;
   return [...data.measures].sort((a, b) => b.savedAt - a.savedAt)[0];
 });
-const currentRoundCount = computed(() =>
-  data.measures.filter(
-    (m) => m.year === data.period.year && m.term === data.period.term && m.round === data.period.round,
-  ).length,
-);
 
 // --- classroom structure grouped by education level (scannable summary) ---
 const LEVELS: { name: string; test: (g: string) => boolean }[] = [
@@ -73,13 +68,13 @@ function saveSchool() {
 
 // --- period edit ---
 const editingPeriod = ref(false);
-const periodDraft = ref({ ...data.period });
+const periodDraft = ref<{ year: string }>({ year: data.period.year });
 function startEditPeriod() {
-  periodDraft.value = { ...data.period };
+  periodDraft.value = { year: data.period.year };
   editingPeriod.value = true;
 }
 function savePeriod() {
-  data.setPeriod({ year: periodDraft.value.year, term: periodDraft.value.term as Term, round: periodDraft.value.round as Round });
+  data.setPeriod({ year: periodDraft.value.year });
   editingPeriod.value = false;
   showToast('บันทึกปีการศึกษาแล้ว');
 }
@@ -226,19 +221,13 @@ function doReset() {
       <div class="toolbar">
         <div class="section-title" style="margin: 0">ปีการศึกษาปัจจุบัน</div>
         <span class="spacer"></span>
-        <button class="btn" @click="startEditPeriod">เปลี่ยนปี/ภาคเรียน</button>
+        <button class="btn" @click="startEditPeriod">เปลี่ยนปีการศึกษา</button>
       </div>
       <div class="ctx-grid">
         <div class="ctx"><div class="ctx-k">ปีการศึกษา</div><div class="ctx-v">{{ data.period.year }}</div></div>
-        <div class="ctx"><div class="ctx-k">ภาคเรียน</div><div class="ctx-v">{{ data.period.term }}</div></div>
-        <div class="ctx"><div class="ctx-k">ครั้งที่วัดปัจจุบัน</div><div class="ctx-v">ครั้งที่ {{ data.period.round }}</div></div>
         <div class="ctx">
           <div class="ctx-k">บันทึกการวัดล่าสุด</div>
           <div class="ctx-v">{{ latestMeasure ? latestMeasure.date : 'ยังไม่มีการวัด' }}</div>
-        </div>
-        <div class="ctx">
-          <div class="ctx-k">วัดแล้วในรอบนี้</div>
-          <div class="ctx-v">{{ currentRoundCount }} รายการ</div>
         </div>
       </div>
       <div v-if="editingPeriod" style="margin-top: var(--s3)">
@@ -246,20 +235,6 @@ function doReset() {
           <label>
             <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">ปีการศึกษา</div>
             <input class="search" v-model="periodDraft.year" style="width: 90px" />
-          </label>
-          <label>
-            <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">ภาคเรียน</div>
-            <select class="search" v-model="periodDraft.term" style="width: 80px">
-              <option value="1">1</option>
-              <option value="2">2</option>
-            </select>
-          </label>
-          <label>
-            <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">ครั้งที่</div>
-            <select class="search" v-model="periodDraft.round" style="width: 80px">
-              <option value="1">1</option>
-              <option value="2">2</option>
-            </select>
           </label>
         </div>
         <div style="display: flex; gap: var(--s2)">

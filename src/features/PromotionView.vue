@@ -165,7 +165,7 @@ function confirm() {
     { students: data.students, updateStudent: data.updateStudent, deleteStudent: data.deleteStudent },
     finalDecisions,
   );
-  data.setPeriod({ year: toYear.value, term: '1', round: '1' });
+  data.setPeriod({ year: toYear.value });
   i.value = 5;
 }
 </script>

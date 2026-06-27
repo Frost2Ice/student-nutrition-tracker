@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import { useData } from '../stores/data';
 import { GRADE_ORDER } from '../domain/grade/ladder';
-import type { Term } from '../domain/types';
 
 const emit = defineEmits<{ done: []; exit: [] }>();
 const data = useData();
@@ -38,7 +37,7 @@ function rebuildStructure() {
 
 function persistAll() {
   data.saveSetup({ ...schoolForm.value, maxGrade: structureForm.value.maxGrade });
-  data.setPeriod({ year: yearForm.value.year, term: '1' as Term, round: '1' });
+  data.setPeriod({ year: yearForm.value.year });
   data.setClassrooms(
     structure.value.map((g) => ({
       grade: g.grade,

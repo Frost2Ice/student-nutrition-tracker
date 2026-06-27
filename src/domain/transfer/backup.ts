@@ -1,4 +1,4 @@
-import type { Student, Measurement, Setup, Term, Round } from '../types';
+import type { Student, Measurement, Setup } from '../types';
 
 const VERSION = 'ntr2-1';
 
@@ -7,7 +7,7 @@ interface BackupPayload {
   students: Student[];
   measures: Measurement[];
   setup: Setup;
-  period: { year: string; term: Term; round: Round };
+  period: { year: string };
   classrooms: { grade: string; rooms: string[] }[];
 }
 
@@ -15,7 +15,7 @@ export function serializeBackup(state: {
   students: Student[];
   measures: Measurement[];
   setup: Setup;
-  period: { year: string; term: Term; round: Round };
+  period: { year: string };
   classrooms: { grade: string; rooms: string[] }[];
 }): string {
   const payload: BackupPayload = {
@@ -23,7 +23,7 @@ export function serializeBackup(state: {
     students: state.students,
     measures: state.measures,
     setup: state.setup,
-    period: state.period,
+    period: { year: state.period.year },
     classrooms: state.classrooms,
   };
   return JSON.stringify(payload);
@@ -33,7 +33,7 @@ export function parseBackup(text: string): {
   students: Student[];
   measures: Measurement[];
   setup: Setup;
-  period: { year: string; term: Term; round: Round };
+  period: { year: string };
   classrooms: { grade: string; rooms: string[] }[];
 } {
   let parsed: unknown;
@@ -67,7 +67,7 @@ export function parseBackup(text: string): {
     students: p.students as Student[],
     measures,
     setup: p.setup as Setup,
-    period: p.period as { year: string; term: Term; round: Round },
+    period: { year: String((p.period as { year?: unknown }).year ?? '') },
     classrooms: Array.isArray(p.classrooms)
       ? (p.classrooms as { grade: string; rooms: string[] }[])
       : [],

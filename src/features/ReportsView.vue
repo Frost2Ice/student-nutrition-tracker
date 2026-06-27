@@ -5,12 +5,13 @@ import { summarize, summaryToAoa, WFH_BUCKET_LABELS } from '../domain/report/sum
 import { printElement } from './print';
 import { aoaToXlsxBlob } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
+import type { Term } from '../domain/types';
 
 const data = useData();
 
 // Filter: year + term; default to current period
 const year = ref(data.period.year || '2568');
-const term = ref(data.period.term || '1');
+const term = ref<Term>('1');
 
 // Dynamic year options: current period year ± 1
 const yearOptions = computed(() => {
