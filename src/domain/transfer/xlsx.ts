@@ -46,6 +46,15 @@ export const MEASURE_HEADERS = [
   'วันที่วัด',
 ] as const;
 
+export const MEASURE_ROSTER_HEADERS = [
+  'รหัสนักเรียน',
+  'ชื่อ',
+  'นามสกุล',
+  'น้ำหนัก(กก.)',
+  'ส่วนสูง(ซม.)',
+  'วันที่วัด',
+] as const;
+
 // ---------------------------------------------------------------------------
 // Pure AOA builders (unit-testable, no SheetJS needed)
 // ---------------------------------------------------------------------------
@@ -71,6 +80,62 @@ export function measureTemplateAoa(): string[][] {
   ];
 }
 
+export function measureRosterTemplateAoa(students: Student[]): string[][] {
+  const rows: string[][] = [[...MEASURE_ROSTER_HEADERS]];
+  for (const s of students) {
+    rows.push([s.id, s.firstName, s.lastName, '', '', '']);
+  }
+  return rows;
+}
+
+export function pickMeasureColumns(aoa: string[][]): string[][] {
+  if (aoa.length === 0) return aoa;
+  const header = aoa[0].map((h) => (h ?? '').trim());
+  const want = ['รหัสนักเรียน', 'น้ำหนัก(กก.)', 'ส่วนสูง(ซม.)', 'วันที่วัด'];
+  const idx = want.map((w) => header.indexOf(w));
+  if (idx.some((i) => i === -1)) return aoa; // a required header is missing — leave as-is
+  const out: string[][] = [[...MEASURE_HEADERS]];
+  for (let r = 1; r < aoa.length; r++) {
+    const row = aoa[r];
+    out.push(idx.map((i) => (row[i] ?? '').trim()));
+  }
+  return out;
+}
+
+/**
+ * Take a per-classroom AoA (STUDENT_CLASSROOM_HEADERS layout: id, ชื่อ, นามสกุล,
+ * วันเกิด day/month/year, เพศ — no grade/room) and append the picked grade/room to
+ * every data row, producing a full STUDENT_HEADERS AoA that parseStudentAoa reads.
+ * The header row is normalized to STUDENT_HEADERS (parseStudentAoa ignores it).
+ */
+export function injectGradeRoom(aoa: string[][], grade: string, room: string): string[][] {
+  if (aoa.length === 0) return aoa;
+  const out: string[][] = [[...STUDENT_HEADERS]];
+  for (let i = 1; i < aoa.length; i++) {
+    const c = aoa[i];
+    out.push([c[0] ?? '', c[1] ?? '', c[2] ?? '', c[3] ?? '', c[4] ?? '', c[5] ?? '', c[6] ?? '', grade, room]);
+  }
+  return out;
+}
+
+/**
+ * Turn a block of text pasted from Excel/Sheets into an AoA shaped like the
+ * given template (header row + data rows), so it can flow through the same
+ * parsers as an uploaded file. Tab- or comma-separated; a pasted header row is
+ * detected and replaced with the canonical `header`. Blank lines are dropped.
+ */
+export function pasteToAoa(text: string, header: readonly string[]): string[][] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+  if (!lines.length) return [];
+  const split = (line: string) =>
+    line.split(line.includes('\t') ? '\t' : ',').map((c) => c.trim());
+  const first = split(lines[0]);
+  // header-like when the first cell echoes the template header or isn't an id (ids start with a digit)
+  const headerLike = first[0] === header[0] || !/^\d/.test(first[0] ?? '');
+  const body = headerLike ? lines.slice(1) : lines;
+  return [[...header], ...body.map(split)];
+}
+
 export function studentsToAoa(students: Student[]): string[][] {
   const rows: string[][] = [[...STUDENT_HEADERS]];
   for (const s of students) {
@@ -83,6 +148,45 @@ export function studentsToAoa(students: Student[]): string[][] {
 export function graduatesToAoa(students: Student[]): string[][] {
   // Same columns as students — graduates list
   return studentsToAoa(students);
+}
+
+export interface GridRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  gender: string; // '' | 'ชาย' | 'หญิง'
+  dob: string;    // canonical 'D/M/YYYY' or ''
+}
+
+/** Serialize fast-grid rows into the classroom-template AoA so parseStudentImport can validate them. */
+export function gridRowsToAoa(rows: GridRow[]): string[][] {
+  const aoa: string[][] = [[...STUDENT_CLASSROOM_HEADERS]];
+  for (const r of rows) {
+    const blank = !r.id.trim() && !r.firstName.trim() && !r.lastName.trim() && !r.gender.trim() && !r.dob.trim();
+    if (blank) continue;
+    const [day = '', month = '', year = ''] = r.dob.trim() ? r.dob.split('/') : [];
+    aoa.push([r.id.trim(), r.firstName.trim(), r.lastName.trim(), day, month, year, r.gender.trim()]);
+  }
+  return aoa;
+}
+
+/**
+ * Parse a pasted TSV/CSV block matching the Excel แม่แบบ column layout
+ * (STUDENT_CLASSROOM_HEADERS): id, firstName, lastName, dob-day, dob-month,
+ * dob-year(BE), gender. DOB columns 3-5 are joined into canonical D/M/YYYY.
+ */
+export function parseClipboardGrid(text: string): GridRow[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const cellsOf = (line: string) => line.split(line.includes('\t') ? '\t' : ',').map((c) => c.trim());
+  const first = cellsOf(lines[0]);
+  const headerLike = !/^\d+$/.test(first[0] ?? '');
+  const body = headerLike ? lines.slice(1) : lines;
+  return body.map((line) => {
+    const [id = '', firstName = '', lastName = '', d = '', m = '', y = '', gender = ''] = cellsOf(line);
+    const dob = d && m && y ? `${+d}/${+m}/${y}` : '';
+    return { id, firstName, lastName, gender, dob };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +250,7 @@ export function parseStudentAoa(aoa: string[][]): {
   for (let i = 1; i < aoa.length; i++) {
     const rowNum = i + 1;
     const cells = aoa[i];
-    const [id, firstName, lastName, dob, gender, grade, room] = cells.map((c) =>
+    const [id, firstName, lastName, d, m, y, gender, grade, room] = cells.map((c) =>
       (c ?? '').trim(),
     );
 
@@ -159,6 +263,18 @@ export function parseStudentAoa(aoa: string[][]): {
       continue;
     }
 
+    if (!d || !m || !y) {
+      skipped.push({ row: rowNum, reason: 'กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)' });
+      continue;
+    }
+
+    const dob = `${+d}/${+m}/${y}`;
+    const dobErr = validateThaiDate(dob, true);
+    if (dobErr) {
+      skipped.push({ row: rowNum, reason: dobErr });
+      continue;
+    }
+
     const validGenders: Gender[] = ['ชาย', 'หญิง'];
     const resolvedGender: Gender =
       validGenders.includes(gender as Gender) ? (gender as Gender) : 'ชาย';
@@ -167,7 +283,7 @@ export function parseStudentAoa(aoa: string[][]): {
       id,
       firstName,
       lastName: lastName ?? '',
-      dob: dob ?? '',
+      dob,
       gender: resolvedGender,
       grade: grade ?? '',
       room: room ?? '',

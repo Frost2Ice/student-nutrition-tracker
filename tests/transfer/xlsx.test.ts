@@ -50,7 +50,7 @@ describe('parseStudentAoa', () => {
   it('skips a row missing id with a reason', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1'],
+      ['', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1'],
     ];
     const { rows, skipped } = parseStudentAoa(aoa);
     expect(rows).toHaveLength(0);
@@ -62,7 +62,7 @@ describe('parseStudentAoa', () => {
   it('skips a row missing ชื่อ', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['10001', '', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1'],
+      ['10001', '', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1'],
     ];
     const { rows, skipped } = parseStudentAoa(aoa);
     expect(rows).toHaveLength(0);
@@ -72,18 +72,20 @@ describe('parseStudentAoa', () => {
   it('defaults gender to ชาย when blank/invalid', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['10001', 'สมชาย', 'ใจดี', '15/3/2558', '', 'ป.1', '1'],
+      ['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', '', 'ป.1', '1'],
     ];
     const { rows } = parseStudentAoa(aoa);
     expect(rows[0].gender).toBe('ชาย');
+    expect(rows[0].grade).toBe('ป.1');
+    expect(rows[0].room).toBe('1');
+    expect(rows[0].dob).toBe('15/3/2558');
   });
 
-  it('parses a valid student row', () => {
-    const aoa = studentTemplateAoa();
-    const { rows, skipped } = parseStudentAoa(aoa);
-    expect(rows).toHaveLength(1);
+  it('round-trips studentTemplateAoa() — dob joined, grade & room preserved', () => {
+    const { rows, skipped } = parseStudentAoa(studentTemplateAoa());
     expect(skipped).toHaveLength(0);
-    expect(rows[0].id).toBe('10001');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', dob: '15/3/2558', gender: 'ชาย', grade: 'ป.1', room: '1' });
   });
 });
 
