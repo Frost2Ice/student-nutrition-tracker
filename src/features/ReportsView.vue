@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
+import { useHeader } from '../stores/header';
 import { summarize, summaryToAoa, WFH_BUCKET_LABELS } from '../domain/report/summary';
 import { printElement } from './print';
 import { aoaToXlsxBlob } from '../domain/transfer/xlsx';
@@ -8,6 +9,8 @@ import { downloadBlob } from './download';
 import type { Term } from '../domain/types';
 
 const data = useData();
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'รายงาน', back: null, context: 'year' }));
 
 // Filter: year + term; default to current period
 const year = ref(data.period.year || '2568');
@@ -68,7 +71,6 @@ function handleXlsx() {
 
 <template>
   <div class="container">
-    <h1 class="page-title">รายงานสำหรับหน่วยงานต้นสังกัด</h1>
     <p class="page-sub">สรุปภาวะโภชนาการของทั้งโรงเรียนตามปีการศึกษาและภาคเรียน สำหรับพิมพ์เป็น PDF หรือส่งออกเป็นไฟล์ตาราง</p>
 
     <!-- filter: only year + term (BRD FR-8.1 filterable by academic year) -->

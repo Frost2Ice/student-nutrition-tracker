@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useData } from './stores/data';
+import { useHeader } from './stores/header';
 import { parseBackup } from './domain/transfer/backup';
 import OnboardingView from './features/OnboardingView.vue';
 import HomeView from './features/HomeView.vue';
@@ -12,11 +13,13 @@ import PromotionView from './features/PromotionView.vue';
 import ReportsView from './features/ReportsView.vue';
 import WizardHubView from './features/wizard/WizardHubView.vue';
 import ImportDialog from './components/ImportDialog.vue';
+import AppHeader from './components/AppHeader.vue';
 
 type Dest = 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings' | 'wizard';
 type Overlay = 'onboarding' | 'import' | 'promotion' | null;
 
 const data = useData();
+const header = useHeader();
 
 const welcome = ref<'choose' | 'restore'>('choose');
 const restoreError = ref('');
@@ -26,7 +29,6 @@ const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
 const focusStudent = ref<string | null>(null);
 const wizardStart = ref<string | null>(null);
-const inWizardFlow = ref(false);
 
 function pickRestoreFile() {
   restoreInput.value?.click();
@@ -73,10 +75,11 @@ function go(target: string, payload?: { grade: string; room: string } | { start:
   } else {
     if (target === 'wizard') {
       wizardStart.value = payload && 'start' in payload ? payload.start : null;
-    } else {
-      inWizardFlow.value = false;
     }
     dest.value = target as Dest;
+    // Set the header optimistically so the bar never blanks during the
+    // out-in view transition; the destination view refines it on mount.
+    header.setHeader({ title: nav.find((n) => n.id === target)?.label ?? '', back: null, context: 'year' });
   }
   window.scrollTo({ top: 0 });
 }
@@ -89,10 +92,6 @@ const periodLine = computed(() => {
   const s = data.measureSession;
   const base = `ปีการศึกษา ${data.period.year}`;
   return s ? `${base} · ภาคเรียนที่ ${s.term} · ครั้งที่ ${s.round}` : base;
-});
-const periodShort = computed(() => {
-  const s = data.measureSession;
-  return s ? `ภาคเรียนที่ ${s.term} · ครั้งที่ ${s.round}` : `ปีการศึกษา ${data.period.year}`;
 });
 </script>
 
@@ -152,10 +151,7 @@ const periodShort = computed(() => {
     </aside>
 
     <div class="main">
-      <header v-if="!inWizardFlow" class="topbar">
-        <div class="brand-logo" style="width: 32px; height: 32px; font-size: 17px">🍎</div>
-        <div class="period-chip" style="width: auto; margin-left: auto">📅 {{ periodShort }}</div>
-      </header>
+      <AppHeader :go-home="() => go('home')" :is-home="dest === 'home'" />
 
       <main class="content">
         <Transition name="view" mode="out-in">
@@ -165,7 +161,7 @@ const periodShort = computed(() => {
           <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
           <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="dest === 'reports'" key="reports" />
-          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" :start="wizardStart" @go="go" @flow="inWizardFlow = $event" />
+          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" :start="wizardStart" @go="go" />
           <div v-else class="container" :key="dest">
             <h1 class="page-title">{{ destLabel }}</h1>
             <p class="page-sub">(กำลังพัฒนา)</p>

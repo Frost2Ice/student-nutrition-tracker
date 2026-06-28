@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
+import { useHeader } from '../stores/header';
 
 const data = useData();
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'หน้าหลัก', back: null, context: 'year' }));
 const emit = defineEmits<{ go: [dest: string, payload?: { start: string }] }>();
 
 const wizardCards = [
@@ -10,8 +13,6 @@ const wizardCards = [
   { cls: 'j-measure', start: 'measures', ico: '📏', title: 'บันทึกการวัด', desc: 'กรอกน้ำหนัก/ส่วนสูงทีละห้อง' },
   { cls: 'j-export', start: 'export', ico: '📤', title: 'ส่งออกรายงาน', desc: 'ดาวน์โหลดไฟล์เพื่อส่งให้หน่วยงาน' },
 ];
-
-const teacherName = computed(() => data.setup.teacher || '');
 
 const incompleteRooms = computed(() => {
   let count = 0;
@@ -30,7 +31,6 @@ const noStudents = computed(() => data.students.length === 0);
 
 <template>
   <div class="container">
-    <h1 class="page-title"><template v-if="teacherName">สวัสดี คุณครู{{ teacherName }} 👋</template><template v-else>สวัสดีคุณครู 👋</template></h1>
     <p class="page-sub">ภาพรวมของวันนี้</p>
 
     <!-- today focus -->

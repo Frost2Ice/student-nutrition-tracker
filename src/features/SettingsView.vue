@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
+import { useHeader } from '../stores/header';
 import { serializeBackup, parseBackup } from '../domain/transfer/backup';
 import { gradesUpTo } from '../domain/grade/ladder';
 import type { Setup } from '../domain/types';
@@ -8,6 +9,8 @@ import type { Setup } from '../domain/types';
 const emit = defineEmits<{ go: [tab: string] }>();
 
 const data = useData();
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'ตั้งค่า', back: null, context: 'year' }));
 
 // --- reset confirm ---
 const resetConfirm = ref('');
@@ -179,7 +182,6 @@ function doReset() {
 
 <template>
   <div class="container">
-    <h1 class="page-title">ตั้งค่า</h1>
     <p class="page-sub">ข้อมูลโรงเรียน ปีการศึกษา และการดูแลข้อมูล (โปรแกรมนี้เก็บข้อมูลในเครื่องนี้เท่านั้น)</p>
 
     <!-- toast -->

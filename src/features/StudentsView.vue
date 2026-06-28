@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { Chart } from 'chart.js/auto';
 import { useData } from '../stores/data';
 import ThaiDateField from './ThaiDateField.vue';
@@ -7,11 +7,12 @@ import { calcNutrition } from '../domain/nutrition/engine';
 import { buildWfh, buildHfa, buildWfa } from './charts';
 import { getAgeMonths, todayThai } from '../domain/date/thai-date';
 import { validateThaiDate, validateWeight, validateHeight } from '../domain/validation/rules';
-import type { Student, Measurement } from '../domain/types';
-import { aoaToXlsxBlob, studentsToAoa, studentClassroomTemplateAoa } from '../domain/transfer/xlsx';
+import type { Student, Measurement, Term, Round } from '../domain/types';
+import { aoaToXlsxBlob, studentsToAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
 import { printHtml } from './print';
 import ImportDialog from '../components/ImportDialog.vue';
+import { useHeader } from '../stores/header';
 
 const props = defineProps<{ focusId?: string | null }>();
 const emit = defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }]; focused: [] }>();
@@ -25,6 +26,21 @@ const room = ref('');
 const open = ref<Student | null>(null);
 const search = ref('');
 const riskOnly = ref(false);
+
+const header = useHeader();
+function syncHeader() {
+  if (open.value) {
+    header.setHeader({
+      title: `${open.value.firstName} ${open.value.lastName}`,
+      back: () => { open.value = null; },
+      context: 'year',
+    });
+  } else {
+    header.setHeader({ title: 'นักเรียน', back: null, context: 'year' });
+  }
+}
+onMounted(syncHeader);
+watch(open, syncHeader);
 
 // ---- toast ----
 const toast = ref('');
@@ -94,12 +110,6 @@ function toRooms() { level.value = 'rooms'; room.value = ''; importOpen.value = 
 const importOpen = ref(false);
 function onImported(r: { added: number; updated: number }) {
   say(`นำเข้าห้อง ${grade.value}/${room.value} แล้ว · เพิ่ม ${r.added} · อัปเดต ${r.updated}`);
-}
-function downloadRoomTemplate() {
-  downloadBlob(
-    aoaToXlsxBlob(studentClassroomTemplateAoa(), 'รายชื่อนักเรียน'),
-    `แม่แบบรายชื่อ ${grade.value}-${room.value}.xlsx`,
-  );
 }
 function exportRoom() {
   const list = data.roomStudents(grade.value, room.value);
@@ -304,7 +314,9 @@ function confirmDelStudent() {
 // ---- measurement form ----
 const mOpen = ref(false);
 const mEditTarget = ref<Measurement | null>(null);
-const mForm = reactive({ date: '', w: '', h: '' });
+const mForm = reactive<{ date: string; w: string; h: string; term: Term; round: Round }>({
+  date: '', w: '', h: '', term: '1', round: '1',
+});
 const mErrors = reactive({ date: '', w: '', h: '' });
 const dupWarn = ref(false);
 
@@ -312,7 +324,7 @@ function clearMErrors() { mErrors.date = ''; mErrors.w = ''; mErrors.h = ''; }
 
 function openAddMeasure() {
   mEditTarget.value = null;
-  Object.assign(mForm, { date: todayThai(), w: '', h: '' });
+  Object.assign(mForm, { date: todayThai(), w: '', h: '', term: '1', round: '1' });
   clearMErrors();
   dupWarn.value = false;
   mOpen.value = true;
@@ -320,7 +332,7 @@ function openAddMeasure() {
 
 function openEditMeasure(m: Measurement) {
   mEditTarget.value = m;
-  Object.assign(mForm, { date: m.date, w: String(m.weightKg), h: String(m.heightCm) });
+  Object.assign(mForm, { date: m.date, w: String(m.weightKg), h: String(m.heightCm), term: m.term, round: m.round });
   clearMErrors();
   dupWarn.value = false;
   mOpen.value = true;
@@ -346,15 +358,15 @@ function saveMeasure(force = false) {
 
   const p = data.period;
   if (!mEditTarget.value && !force) {
-    const dup = data.findDuplicate(open.value.id, p.year, p.term, p.round);
+    const dup = data.findDuplicate(open.value.id, p.year, mForm.term, mForm.round);
     if (dup) { dupWarn.value = true; return; }
   }
 
   const newM: Measurement = {
     studentId: open.value.id,
     year: p.year,
-    term: p.term,
-    round: p.round,
+    term: mForm.term,
+    round: mForm.round,
     date: mForm.date.trim(),
     weightKg: wVal,
     heightCm: hVal,
@@ -539,13 +551,10 @@ function exportPdf() {
   <div class="container students-wide">
     <!-- ===== PROFILE ===== -->
     <template v-if="open">
-      <button class="btn quiet" style="margin-bottom: var(--s4)" @click="open = null">← กลับรายชื่อ {{ open.grade }}/{{ open.room }}</button>
-
       <div class="panel">
         <div class="prof-head">
           <div class="avatar">{{ open.gender === 'ชาย' ? '👦' : '👧' }}</div>
           <div style="flex: 1; min-width: 200px">
-            <h1 style="font-size: 24px">{{ open.firstName }} {{ open.lastName }}</h1>
             <div style="color: var(--ink-muted)">รหัส {{ open.id }} · {{ open.gender }} · เกิด {{ open.dob }} · อายุ {{ ageLabel(open) }}</div>
             <div style="margin-top: 4px"><span class="pill neutral">ชั้นปัจจุบัน {{ open.grade }}/{{ open.room }}</span></div>
           </div>
@@ -630,7 +639,6 @@ function exportPdf() {
 
     <!-- ===== BROWSE ===== -->
     <template v-else>
-      <h1 class="page-title">นักเรียน</h1>
       <p class="page-sub">เลือกชั้นและห้องเพื่อดูรายชื่อ หรือค้นหาเมื่อทราบชื่อ/รหัสนักเรียน</p>
 
       <div style="position: relative; margin-bottom: var(--s5)">
@@ -699,13 +707,6 @@ function exportPdf() {
                 <span class="act-desc">นำเข้ารายชื่อนักเรียนของห้องนี้จากไฟล์ Excel</span>
               </span>
             </button>
-            <button class="act-card" @click="downloadRoomTemplate">
-              <span class="act-ico">📄</span>
-              <span class="act-body">
-                <span class="act-title">ดาวน์โหลดแม่แบบ Excel</span>
-                <span class="act-desc">ดาวน์โหลดไฟล์ตัวอย่างสำหรับกรอกรายชื่อนักเรียนห้องนี้</span>
-              </span>
-            </button>
             <button class="act-card" :disabled="!currentRoomStudents.length && !roomRiskCount" @click="exportRoom">
               <span class="act-ico">📤</span>
               <span class="act-body">
@@ -743,9 +744,9 @@ function exportPdf() {
     </template>
 
     <!-- ===== student form dialog ===== -->
-    <div v-if="sMode" class="dlg-back" @click.self="sMode = null">
-      <div class="dlg">
-        <div class="dlg-title">{{ sMode === 'add' ? 'เพิ่มนักเรียนใหม่' : 'แก้ไขข้อมูลนักเรียน' }}</div>
+    <div v-if="sMode" class="smodal-back" @click.self="sMode = null">
+      <div class="smodal">
+        <div class="smodal-title">{{ sMode === 'add' ? 'เพิ่มนักเรียนใหม่' : 'แก้ไขข้อมูลนักเรียน' }}</div>
         <div class="form-grid">
           <div class="field">
             <label>รหัสนักเรียน</label>
@@ -787,7 +788,7 @@ function exportPdf() {
             <div v-if="sErrors.grade || sErrors.room" class="field-err">{{ sErrors.grade || sErrors.room }}</div>
           </div>
         </div>
-        <div class="dlg-foot">
+        <div class="smodal-foot">
           <button class="btn quiet" @click="sMode = null">ยกเลิก</button>
           <span class="spacer"></span>
           <button class="btn primary" @click="saveStudent">บันทึก</button>
@@ -796,9 +797,9 @@ function exportPdf() {
     </div>
 
     <!-- ===== measurement form dialog ===== -->
-    <div v-if="mOpen" class="dlg-back" @click.self="mOpen = false">
-      <div class="dlg">
-        <div class="dlg-title">{{ mEditTarget === null ? 'บันทึกการวัด' : 'แก้ไขผลการวัด' }} · {{ open?.firstName }} {{ open?.lastName }}</div>
+    <div v-if="mOpen" class="smodal-back" @click.self="mOpen = false">
+      <div class="smodal">
+        <div class="smodal-title">{{ mEditTarget === null ? 'บันทึกการวัด' : 'แก้ไขผลการวัด' }} · {{ open?.firstName }} {{ open?.lastName }}</div>
         <div class="field">
           <label>วันที่วัด</label>
           <ThaiDateField
@@ -807,6 +808,22 @@ function exportPdf() {
             :year-max="measureYearMax"
           />
           <div v-if="mErrors.date" class="field-err">{{ mErrors.date }}</div>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label>ภาคเรียนที่</label>
+            <select v-model="mForm.term">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ครั้งที่</label>
+            <select v-model="mForm.round">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
         </div>
         <div class="form-grid">
           <div class="field">
@@ -828,7 +845,7 @@ function exportPdf() {
             <button class="btn primary" @click="saveMeasure(true)">ยืนยัน บันทึกเพิ่ม</button>
           </div>
         </div>
-        <div class="dlg-foot">
+        <div class="smodal-foot">
           <button class="btn quiet" @click="mOpen = false">ยกเลิก</button>
           <span class="spacer"></span>
           <button v-if="!dupWarn" class="btn primary" @click="saveMeasure()">บันทึก</button>
@@ -837,14 +854,14 @@ function exportPdf() {
     </div>
 
     <!-- lightweight guard when classroom/grade changes -->
-    <div v-if="gradeConfirm" class="dlg-back" @click.self="gradeConfirm = false">
-      <div class="dlg">
-        <div class="dlg-title">ย้ายชั้น/ห้องของนักเรียน?</div>
+    <div v-if="gradeConfirm" class="smodal-back" @click.self="gradeConfirm = false">
+      <div class="smodal">
+        <div class="smodal-title">ย้ายชั้น/ห้องของนักเรียน?</div>
         <p style="color: var(--ink-muted)">
           {{ open?.firstName }} {{ open?.lastName }} จะย้ายไปอยู่ <b>{{ sForm.grade }}/{{ sForm.room }}</b>
           ตั้งแต่นี้เป็นต้นไป ผลการวัดที่บันทึกไว้แล้วยังคงแสดงชั้นเดิม ณ เวลาที่วัด
         </p>
-        <div class="dlg-foot">
+        <div class="smodal-foot">
           <button class="btn quiet" @click="gradeConfirm = false">ยกเลิก</button>
           <span class="spacer"></span>
           <button class="btn primary" @click="applyStudentEdit">ยืนยันการย้าย</button>
@@ -853,11 +870,11 @@ function exportPdf() {
     </div>
 
     <!-- ===== confirm dialogs ===== -->
-    <div v-if="delStudent" class="dlg-back" @click.self="delStudent = false">
-      <div class="dlg">
-        <div class="dlg-title">ลบนักเรียน?</div>
+    <div v-if="delStudent" class="smodal-back" @click.self="delStudent = false">
+      <div class="smodal">
+        <div class="smodal-title">ลบนักเรียน?</div>
         <p style="color: var(--ink-muted)">จะลบ <b>{{ open?.firstName }} {{ open?.lastName }}</b> และประวัติการวัดทั้งหมดของนักเรียนคนนี้ การลบนี้ย้อนกลับไม่ได้</p>
-        <div class="dlg-foot">
+        <div class="smodal-foot">
           <button class="btn quiet" @click="delStudent = false">ยกเลิก</button>
           <span class="spacer"></span>
           <button class="btn danger" @click="confirmDelStudent">ลบนักเรียน</button>
@@ -865,11 +882,11 @@ function exportPdf() {
       </div>
     </div>
 
-    <div v-if="delMeasureTarget !== null" class="dlg-back" @click.self="delMeasureTarget = null">
-      <div class="dlg">
-        <div class="dlg-title">ลบผลการวัดนี้?</div>
+    <div v-if="delMeasureTarget !== null" class="smodal-back" @click.self="delMeasureTarget = null">
+      <div class="smodal">
+        <div class="smodal-title">ลบผลการวัดนี้?</div>
         <p style="color: var(--ink-muted)">จะลบผลการวัดวันที่ {{ delMeasureTarget?.date }} ออกจากประวัติ</p>
-        <div class="dlg-foot">
+        <div class="smodal-foot">
           <button class="btn quiet" @click="delMeasureTarget = null">ยกเลิก</button>
           <span class="spacer"></span>
           <button class="btn danger" @click="confirmDelMeasure">ลบ</button>
@@ -932,12 +949,12 @@ function exportPdf() {
 .chipbtn:not(.on) .chip-n { background: var(--line); color: var(--ink-muted); }
 
 /* dialog */
-.dlg-back { position: fixed; inset: 0; z-index: var(--z-modal); background: oklch(0.3 0.02 220 / 0.4); display: grid; place-items: center; padding: var(--s4); }
-.dlg { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); width: 100%; max-width: 460px; padding: var(--s5); animation: pop-in 200ms var(--ease) both; }
-.dlg-title { font-size: 19px; font-weight: 700; margin-bottom: var(--s4); }
-.dlg .field { margin-bottom: var(--s3); }
-.dlg-foot { display: flex; align-items: center; margin-top: var(--s5); }
-.dlg-foot .spacer { flex: 1; }
+.smodal-back { position: fixed; inset: 0; z-index: var(--z-modal); background: oklch(0.3 0.02 220 / 0.4); display: grid; place-items: center; padding: var(--s4); }
+.smodal { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); width: 100%; max-width: 460px; padding: var(--s5); animation: pop-in 200ms var(--ease) both; }
+.smodal-title { font-size: 19px; font-weight: 700; margin-bottom: var(--s4); }
+.smodal .field { margin-bottom: var(--s3); }
+.smodal-foot { display: flex; align-items: center; margin-top: var(--s5); }
+.smodal-foot .spacer { flex: 1; }
 .field-err { color: var(--bad); font-size: 13px; margin-top: 4px; }
 
 /* toast */

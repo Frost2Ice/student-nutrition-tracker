@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onBeforeUnmount, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { validateWeight, validateHeight, validateThaiDate, round1 } from '../domain/validation/rules';
 import { calcNutrition } from '../domain/nutrition/engine';
@@ -8,6 +8,7 @@ import type { Term, Round, Student } from '../domain/types';
 import { aoaToXlsxBlob, measureTemplateAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
 import ImportDialog from '../components/ImportDialog.vue';
+import { useHeader } from '../stores/header';
 
 defineEmits<{ done: []; exit: [] }>();
 const data = useData();
@@ -47,6 +48,21 @@ const sessDate = ref(todayThai());
 const pickedGrade = ref('');
 const pickedRoom = ref('');
 const picked = computed(() => (pickedGrade.value && pickedRoom.value ? `${pickedGrade.value}/${pickedRoom.value}` : ''));
+
+const header = useHeader();
+function syncHeader() {
+  if (view.value === 'table') {
+    header.setHeader({
+      title: `ผลการวัด · ห้อง ${picked.value}`,
+      back: () => { view.value = 'rooms'; },
+      context: 'session',
+    });
+  } else {
+    header.setHeader({ title: 'บันทึกการวัด', back: null, context: 'year' });
+  }
+}
+onMounted(syncHeader);
+watch([view, picked], syncHeader);
 
 // A row carries the current inputs plus the originally-loaded values, so we can
 // tell which rows the teacher actually changed (dirty) and only save those.
@@ -234,7 +250,6 @@ const hfaClass: Record<string, string> = {
   <div class="proto-screen proto-wide" :class="{ 'proto-xwide': view === 'table' }">
     <!-- ===== room list ===== -->
     <template v-if="view === 'rooms'">
-      <h1 class="page-title">บันทึกการวัด</h1>
       <p class="page-sub">เลือกห้องเพื่อดูและบันทึกผลการวัดของห้องนั้น</p>
 
       <div v-if="!data.students.length" class="panel">
@@ -264,8 +279,6 @@ const hfaClass: Record<string, string> = {
 
     <!-- ===== room measurement table ===== -->
     <template v-else>
-      <button class="btn quiet" style="margin-bottom: var(--s3)" @click="view = 'rooms'">← เลือกห้องอื่น</button>
-      <h1 class="page-title">ผลการวัด · ห้อง {{ picked }}</h1>
       <p class="page-sub">ปีการศึกษา {{ sessYear }} · ภาคเรียนที่ {{ sessTerm }} · {{ roomTotal }} คน — กรอกหรือแก้ไขได้ในตาราง</p>
 
       <!-- round selector (tabs, not dropdown) + measure date -->
@@ -320,7 +333,6 @@ const hfaClass: Record<string, string> = {
           <div class="c-id">{{ r.student.id }}</div>
           <div class="c-name">
             <span class="nm">{{ r.student.firstName }} {{ r.student.lastName }}</span>
-            <span v-if="isRecorded(r)" class="rec-tag">✓ วัดแล้ว</span>
           </div>
           <div class="c-num">
             <input v-model="r.w" type="number" step="0.1" inputmode="decimal" placeholder="กก." :class="{ dirty: rowDirty(r) }" />
@@ -466,7 +478,6 @@ const hfaClass: Record<string, string> = {
 .measure-grid .pill::before { margin-top: 5px; }
 .empty-c { color: var(--ink-muted); text-align: center; }
 .datarow input.dirty { border-color: var(--brand); background: var(--brand-tint); }
-.rec-tag { font-size: 11px; font-weight: 600; color: var(--good); background: var(--good-tint); padding: 1px 8px; border-radius: 999px; white-space: nowrap; align-self: flex-start; }
 .err { color: var(--bad); font-size: 12px; line-height: 1.3; }
 
 /* save bar: solid footer, saturated primary */
