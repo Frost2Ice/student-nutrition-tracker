@@ -1,7 +1,8 @@
 <!-- src/features/wizard/AddStudentsWizard.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
+import { useHeader } from '../../stores/header';
 import Stepper from '../../components/Stepper.vue';
 import { downloadBlob } from '../download';
 import {
@@ -12,6 +13,10 @@ import type { Student } from '../../domain/types';
 
 const data = useData();
 const emit = defineEmits<{ done: []; exit: [] }>();
+
+// Drive the shared app top bar instead of rendering a separate wizard bar.
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'เพิ่มรายชื่อนักเรียน', back: () => emit('exit'), context: 'year' }));
 
 // mergeStudents expects a MergeStore (students as a { value } ref-like),
 // not the unwrapped Pinia store instance. Same adapter ImportDialog uses.
@@ -100,10 +105,6 @@ const canSave = computed(() => parsed.value.length > 0 && !result.value);
 
 <template>
   <div class="container j-students">
-    <div class="wiz-topbar">
-      <button class="btn wt-back" @click="emit('exit')">← กลับ</button>
-      <div class="wt-title"><span class="wt-medallion">👥</span>เพิ่มรายชื่อนักเรียน</div>
-    </div>
     <Stepper :steps="steps" :current="step" />
 
     <!-- step 0: guided order-ticket flow — one choice at a time -->
@@ -154,9 +155,12 @@ const canSave = computed(() => parsed.value.length > 0 && !result.value);
 
       <div v-if="allPicked" class="order-ticket">
         <span class="ot-ico">🧾</span>
-        <span>เพิ่มรายชื่อเข้าชั้น {{ grade }}/{{ room }}</span>
+        <div class="ot-body">
+          <div class="ot-label">ตรวจสอบก่อนยืนยัน</div>
+          <div class="ot-detail">ชั้น {{ grade }} · ห้อง {{ room }}</div>
+        </div>
       </div>
-      <button class="btn j lg block" :disabled="!allPicked" @click="step = 1">ยืนยัน แล้วไปเพิ่มข้อมูล →</button>
+      <button class="btn j lg block" :disabled="!allPicked" @click="step = 1">ยืนยัน →</button>
     </div>
 
     <!-- step 1: add data -->

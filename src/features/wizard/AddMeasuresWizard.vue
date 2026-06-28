@@ -1,7 +1,8 @@
 <!-- src/features/wizard/AddMeasuresWizard.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
+import { useHeader } from '../../stores/header';
 import Stepper from '../../components/Stepper.vue';
 import { downloadBlob } from '../download';
 import {
@@ -12,6 +13,10 @@ import type { Term, Round, Measurement } from '../../domain/types';
 
 const data = useData();
 const emit = defineEmits<{ done: []; exit: [] }>();
+
+// Drive the shared app top bar instead of rendering a separate wizard bar.
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'บันทึกการวัด', back: () => emit('exit'), context: 'year' }));
 
 // mergeMeasures expects a MergeStore adapter, not the raw Pinia store instance.
 function mergeStore(): MergeStore {
@@ -113,10 +118,6 @@ const canSave = computed(() => parsedRows.value.length > 0 && !result.value);
 
 <template>
   <div class="container j-measure">
-    <div class="wiz-topbar">
-      <button class="btn wt-back" @click="emit('exit')">← กลับ</button>
-      <div class="wt-title"><span class="wt-medallion">📏</span>บันทึกการวัด</div>
-    </div>
     <Stepper :steps="steps" :current="step" />
 
     <!-- step 0: guided order-ticket flow — one choice at a time -->
@@ -207,9 +208,13 @@ const canSave = computed(() => parsedRows.value.length > 0 && !result.value);
 
       <div v-if="allPicked" class="order-ticket">
         <span class="ot-ico">🧾</span>
-        <span>{{ grade }}/{{ room }} · ภาคเรียนที่ {{ term }} · ครั้งที่ {{ round }} · ปี {{ year }}</span>
+        <div class="ot-body">
+          <div class="ot-label">ตรวจสอบก่อนยืนยัน</div>
+          <div class="ot-detail">ชั้น {{ grade }} · ห้อง {{ room }} · ภาคเรียนที่ {{ term }} · ครั้งที่ {{ round }}</div>
+          <div class="ot-sub">ปีการศึกษา {{ year }}</div>
+        </div>
       </div>
-      <button class="btn j lg block" :disabled="!allPicked" @click="step = 1">ยืนยัน แล้วไปกรอกข้อมูล →</button>
+      <button class="btn j lg block" :disabled="!allPicked" @click="step = 1">ยืนยัน →</button>
     </div>
 
     <!-- step 1: data -->

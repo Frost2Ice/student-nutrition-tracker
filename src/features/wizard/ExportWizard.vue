@@ -1,13 +1,18 @@
 <!-- src/features/wizard/ExportWizard.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
+import { useHeader } from '../../stores/header';
 import Stepper from '../../components/Stepper.vue';
 import { downloadBlob } from '../download';
 import { studentsToAoa, aoaToXlsxBlob } from '../../domain/transfer/xlsx';
 
 const data = useData();
 const emit = defineEmits<{ done: []; exit: [] }>();
+
+// Drive the shared app top bar instead of rendering a separate wizard bar.
+const header = useHeader();
+onMounted(() => header.setHeader({ title: 'ส่งออกรายงาน', back: () => emit('exit'), context: 'year' }));
 
 const steps = ['เลือกขอบเขต', 'เลือกรูปแบบ', 'ดาวน์โหลด'];
 const step = ref(0);
@@ -40,10 +45,6 @@ function exportXlsx() {
 
 <template>
   <div class="container j-export">
-    <div class="wiz-topbar">
-      <button class="btn wt-back" @click="emit('exit')">← กลับ</button>
-      <div class="wt-title"><span class="wt-medallion">📤</span>ส่งออกรายงาน</div>
-    </div>
     <Stepper :steps="steps" :current="step" />
 
     <!-- step 0: guided order-ticket flow -->
