@@ -26,10 +26,28 @@
   --shadow: 0 1px 2px oklch(0.5 0.02 220 / 0.06), 0 8px 28px oklch(0.5 0.03 220 / 0.06);
   --shadow-sm: 0 1px 2px oklch(0.5 0.02 220 / 0.07);
 
+  /* journey accents — three harmonized hues (teal → green → periwinkle),
+     moderate chroma so the surface stays calm/clinical, never childish */
+  --j-students: oklch(0.58 0.085 195);
+  --j-students-ink: oklch(0.4 0.075 200);
+  --j-students-tint: oklch(0.96 0.022 195);
+  --j-measure: oklch(0.56 0.097 168);
+  --j-measure-ink: oklch(0.42 0.085 170);
+  --j-measure-tint: oklch(0.96 0.03 168);
+  --j-export: oklch(0.56 0.1 268);
+  --j-export-ink: oklch(0.42 0.09 268);
+  --j-export-tint: oklch(0.96 0.028 268);
+
+  /* premium layered elevation, tinted toward brand hue */
+  --shadow-lift: 0 1px 2px oklch(0.5 0.04 220 / 0.05), 0 6px 16px oklch(0.5 0.05 220 / 0.07),
+    0 18px 40px oklch(0.5 0.06 220 / 0.08);
+  --shadow-accent: 0 10px 30px oklch(0.58 0.1 200 / 0.18);
+
   /* z-scale */
   --z-nav: 100; --z-sticky: 200; --z-backdrop: 300; --z-modal: 400; --z-toast: 500;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
   font-family: 'Sarabun', 'Leelawadee UI', 'Tahoma', sans-serif;
   color: var(--ink);
