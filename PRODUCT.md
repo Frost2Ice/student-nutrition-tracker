@@ -81,6 +81,14 @@ graduates (with full measurement history) → show archive filename → remove f
 active registry → complete → clear success summary.
 
 ## Student Lifecycle (kept deliberately simple)
+- **One living roster, run endlessly.** The app holds a single rolling roster of
+  *currently-enrolled* students — never a separate per-year roster. The school
+  runs it year after year: promotion rolls everyone forward a grade, graduation
+  evicts the top grade. This keeps the roster a bounded window, not an
+  ever-growing multi-year store. A per-year-roster model (duplicating students
+  into each new academic year) was deliberately rejected — promotion/graduation
+  already give the year roll, history is preserved on measurements, and
+  duplication would add id-collision and edit-propagation problems for no gain.
 - **Registry = current state only** (id, name, gender, dob, current grade/room). No
   history, no enrolment timeline. Exists only to support measurements.
 - **Measurements = immutable history**, each snapshotting academic year / term /

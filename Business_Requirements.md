@@ -102,8 +102,13 @@ Represents one weight/height capture for a student in a given period.
 | `weight` | number | Weight in kilograms. |
 | `height` | number | Height in centimeters. |
 | `_t` | number | Internal save timestamp (epoch ms). Used to break ties when a student has duplicate records in the same period. |
+| `gradeAtMeasure` | string | Grade snapshot at the time of measurement. |
+| `roomAtMeasure` | string | Classroom snapshot at the time of measurement. |
 
-**Note:** Grade and room are **not** stored on measurements. They are derived at display time from the current student master record (`mGrade()` / `mRoom()`).
+**Note:** Grade and room are **snapshotted onto each measurement** at save time
+(`gradeAtMeasure` / `roomAtMeasure`), so historical reports reflect where the
+student was when measured, not their current grade/room. Measurements are
+immutable history and never change after promotion or room moves.
 
 ### 4.3 School profile (`setup`)
 | Field | Type | Notes |
@@ -268,8 +273,12 @@ The **same** validation rules apply to manual entry and to CSV import.
 ### 6.2 Classification Consistency Rule
 Table, dashboard, charts, PDF, and CSV must always use one shared classification function fed by the same reference tables that render the chart zones. No alternate or simplified classification (e.g., fixed BMI thresholds) is permitted anywhere.
 
-### 6.3 Historical Grade/Room Constraint (accepted limitation)
-Grade and room are stored only on the current student master record, not per measurement. Therefore, historical reports display a student's **current** grade/room, not the grade/room at the time of measurement. This is an intentional design decision aligned with the "current-state master data" principle. The reports screen displays a notice informing the teacher of this behavior. (Capturing grade/room per measurement is explicitly out of scope unless reprioritized.)
+### 6.3 Historical Grade/Room Snapshot
+Each measurement snapshots the student's grade and room at save time
+(`gradeAtMeasure` / `roomAtMeasure`). Historical reports therefore reflect where
+the student was **when measured**, correct across promotions and room moves. The
+student master record still holds only the **current** grade/room; the registry is
+a single living roster (see PRODUCT.md "Student Lifecycle"), not a per-year store.
 
 ### 6.4 Duplicate Measurement Handling
 The system permits multiple records in the same period only after an explicit confirmation. The latest-per-student computation uses the save timestamp as a tie-breaker to ensure the most recently saved record is the one used in dashboards and reports.

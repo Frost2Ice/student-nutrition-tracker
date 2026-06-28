@@ -225,6 +225,22 @@ nav → sticky → backdrop → modal → toast.
 - **Stepper (wizard):** horizontal numbered steps showing all stages and current
   position; used by the Promotion Wizard and Import flow so the teacher always knows
   where they are and what remains.
+- **Order-ticket picker (food-order flow):** the preferred pattern for any
+  multi-field selection in a wizard (e.g. ชั้น → ห้อง → ภาคเรียน → ครั้งที่วัด in
+  บันทึกการวัด, ชั้น → ห้อง in เพิ่มรายชื่อ). Present **one choice at a time**: only the
+  active row is open showing selectable tiles; rows ahead are locked/dimmed with a
+  number badge; each pick **auto-advances** to the next and **collapses** the chosen
+  row into a one-line summary with a ✓ and a **"เปลี่ยน"** edit link. End with a 🧾
+  summary ticket of all choices and a full-width confirm button enabled only when
+  every choice is made. Why: non-technical teachers read one decision far more
+  reliably than a wall of pickers, and the running summary makes the selection state
+  unmistakable — like ordering food. Classes: `.order` / `.order-row`
+  (active/done/locked) / `.order-ticket` (see `journeys.css`); tiles are `.tile` with
+  a `.tile-check` badge. Accent-aware via the wizard's `--accent`.
+- **Selectable tile:** `.tile` — emoji glyph + label, accent border + tint + ✓ badge
+  when selected, hover lift. The building block inside an order-ticket row (and any
+  grade/room/option choice). No cartoon illustrations — offline single-file app, and
+  the brand stays calm/clinical.
 - **Empty state:** icon + one-sentence explanation + the next-step button; teaches
   the interface, never "no data".
 - **Confirmation:** states what happens, how many records, and how to recover; used
@@ -234,6 +250,12 @@ nav → sticky → backdrop → modal → toast.
 ## Do's and Don'ts
 
 **Do**
+- **Two doorways to the same data, not two apps.** Guided wizards (the
+  `ผู้ช่วยจัดการข้อมูล` hub, food-order flow) are the *easy* doorway for adding/common
+  tasks; the existing table views (`StudentsView`, `MeasureView`, `ReportsView`) are
+  the *advanced* doorway for dense viewing/editing. Link between them (the hub footer
+  links to the tables) over one shared store + domain. Never build a global
+  easy/advanced mode toggle or a parallel second UI — it doubles the surface and rots.
 - Answer the four questions on every screen; preview outcomes before the user
   commits.
 - Make destructive-sounding steps prove **data is moved, not lost**: export first,
