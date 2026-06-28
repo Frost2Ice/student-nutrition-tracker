@@ -113,10 +113,9 @@ const canSave = computed(() => parsedRows.value.length > 0 && !result.value);
 
 <template>
   <div class="container j-measure">
-    <div class="wiz-back"><button class="btn" @click="emit('exit')">← กลับ</button></div>
-    <div class="wiz-head">
-      <span class="wh-medallion">📏</span>
-      <div class="wh-title">บันทึกการวัด</div>
+    <div class="wiz-topbar">
+      <button class="btn wt-back" @click="emit('exit')">← กลับ</button>
+      <div class="wt-title"><span class="wt-medallion">📏</span>บันทึกการวัด</div>
     </div>
     <Stepper :steps="steps" :current="step" />
 
