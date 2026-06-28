@@ -9,7 +9,7 @@ defineProps<{ steps: string[]; current: number }>();
         <span class="dot">{{ i < current ? '✓' : i + 1 }}</span>
         <span>{{ s }}</span>
       </div>
-      <span v-if="i < steps.length - 1" class="sep"></span>
+      <span v-if="i < steps.length - 1" class="sep" :class="{ filled: i < current }"></span>
     </template>
   </div>
 </template>

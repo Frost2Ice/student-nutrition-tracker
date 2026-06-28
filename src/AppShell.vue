@@ -9,9 +9,10 @@ import MeasureView from './features/MeasureView.vue';
 import SettingsView from './features/SettingsView.vue';
 import PromotionView from './features/PromotionView.vue';
 import ReportsView from './features/ReportsView.vue';
+import WizardHubView from './features/wizard/WizardHubView.vue';
 import ImportDialog from './components/ImportDialog.vue';
 
-type Dest = 'home' | 'students' | 'measure' | 'reports' | 'settings';
+type Dest = 'home' | 'students' | 'measure' | 'reports' | 'settings' | 'wizard';
 type Overlay = 'onboarding' | 'import' | 'promotion' | null;
 
 const data = useData();
@@ -23,12 +24,6 @@ const dest = ref<Dest>('home');
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
 const focusStudent = ref<string | null>(null);
-
-function goProfile(id: string) {
-  focusStudent.value = id;
-  dest.value = 'students';
-  window.scrollTo({ top: 0 });
-}
 
 function pickRestoreFile() {
   restoreInput.value?.click();
@@ -57,6 +52,7 @@ const nav: { id: Dest; label: string; ico: string }[] = [
   { id: 'measure', label: 'บันทึกการวัด', ico: '📏' },
   { id: 'reports', label: 'รายงาน', ico: '📋' },
   { id: 'settings', label: 'ตั้งค่า', ico: '⚙️' },
+  { id: 'wizard', label: 'ผู้ช่วยจัดการข้อมูล', ico: '🧭' },
 ];
 const overlayTitle: Record<string, string> = {
   onboarding: 'เริ่มตั้งค่าระบบ', import: 'นำเข้ารายชื่อนักเรียน', promotion: 'เลื่อนชั้นปีการศึกษา',
@@ -80,13 +76,15 @@ function closeOverlay() {
   importTarget.value = null;
 }
 
-const periodLine = computed(
-  () =>
-    `ปีการศึกษา ${data.period.year} · ภาคเรียน ${data.period.term} · ครั้งที่ ${data.period.round}`,
-);
-const periodShort = computed(
-  () => `ภาค ${data.period.term} · ครั้งที่ ${data.period.round}`,
-);
+const periodLine = computed(() => {
+  const s = data.measureSession;
+  const base = `ปีการศึกษา ${data.period.year}`;
+  return s ? `${base} · ภาคเรียนที่ ${s.term} · ครั้งที่ ${s.round}` : base;
+});
+const periodShort = computed(() => {
+  const s = data.measureSession;
+  return s ? `ภาคเรียนที่ ${s.term} · ครั้งที่ ${s.round}` : `ปีการศึกษา ${data.period.year}`;
+});
 </script>
 
 <template>
@@ -155,9 +153,10 @@ const periodShort = computed(
         <Transition name="view" mode="out-in">
           <HomeView v-if="dest === 'home'" key="home" @go="go" />
           <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" @go="go" @focused="focusStudent = null" />
-          <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" @profile="goProfile" />
+          <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
           <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="dest === 'reports'" key="reports" />
+          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" @go="go" />
           <div v-else class="container" :key="dest">
             <h1 class="page-title">{{ destLabel }}</h1>
             <p class="page-sub">(กำลังพัฒนา)</p>
