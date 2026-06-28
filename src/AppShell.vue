@@ -5,6 +5,7 @@ import { parseBackup } from './domain/transfer/backup';
 import OnboardingView from './features/OnboardingView.vue';
 import HomeView from './features/HomeView.vue';
 import StudentsView from './features/StudentsView.vue';
+import StudentsPocView from './features/StudentsPocView.vue';
 import MeasureView from './features/MeasureView.vue';
 import SettingsView from './features/SettingsView.vue';
 import PromotionView from './features/PromotionView.vue';
@@ -12,7 +13,7 @@ import ReportsView from './features/ReportsView.vue';
 import WizardHubView from './features/wizard/WizardHubView.vue';
 import ImportDialog from './components/ImportDialog.vue';
 
-type Dest = 'home' | 'students' | 'measure' | 'reports' | 'settings' | 'wizard';
+type Dest = 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings' | 'wizard';
 type Overlay = 'onboarding' | 'import' | 'promotion' | null;
 
 const data = useData();
@@ -24,6 +25,8 @@ const dest = ref<Dest>('home');
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
 const focusStudent = ref<string | null>(null);
+const wizardStart = ref<string | null>(null);
+const inWizardFlow = ref(false);
 
 function pickRestoreFile() {
   restoreInput.value?.click();
@@ -49,6 +52,7 @@ function onRestoreFile(e: Event) {
 const nav: { id: Dest; label: string; ico: string }[] = [
   { id: 'home', label: 'หน้าหลัก', ico: '🏠' },
   { id: 'students', label: 'นักเรียน', ico: '👥' },
+  { id: 'students-poc', label: 'นักเรียน (POC)', ico: '🧪' },
   { id: 'measure', label: 'บันทึกการวัด', ico: '📏' },
   { id: 'reports', label: 'รายงาน', ico: '📋' },
   { id: 'settings', label: 'ตั้งค่า', ico: '⚙️' },
@@ -60,13 +64,18 @@ const overlayTitle: Record<string, string> = {
 
 const destLabel = computed(() => nav.find((n) => n.id === dest.value)?.label ?? '');
 
-function go(target: string, payload?: { grade: string; room: string }) {
+function go(target: string, payload?: { grade: string; room: string } | { start: string }) {
   if (target === 'import' || target === 'promotion' || target === 'onboarding') {
-    if (target === 'import' && payload) {
+    if (target === 'import' && payload && 'grade' in payload) {
       importTarget.value = payload;
     }
     overlay.value = target as Overlay;
   } else {
+    if (target === 'wizard') {
+      wizardStart.value = payload && 'start' in payload ? payload.start : null;
+    } else {
+      inWizardFlow.value = false;
+    }
     dest.value = target as Dest;
   }
   window.scrollTo({ top: 0 });
@@ -143,20 +152,20 @@ const periodShort = computed(() => {
     </aside>
 
     <div class="main">
-      <header class="topbar">
+      <header v-if="!inWizardFlow" class="topbar">
         <div class="brand-logo" style="width: 32px; height: 32px; font-size: 17px">🍎</div>
-        <div style="font-weight: 700; flex: 1">{{ nav.find((n) => n.id === dest)?.label }}</div>
-        <div class="period-chip" style="width: auto">📅 {{ periodShort }}</div>
+        <div class="period-chip" style="width: auto; margin-left: auto">📅 {{ periodShort }}</div>
       </header>
 
       <main class="content">
         <Transition name="view" mode="out-in">
           <HomeView v-if="dest === 'home'" key="home" @go="go" />
           <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" @go="go" @focused="focusStudent = null" />
+          <StudentsPocView v-else-if="dest === 'students-poc'" key="students-poc" @go="go" />
           <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
           <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="dest === 'reports'" key="reports" />
-          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" @go="go" />
+          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" :start="wizardStart" @go="go" @flow="inWizardFlow = $event" />
           <div v-else class="container" :key="dest">
             <h1 class="page-title">{{ destLabel }}</h1>
             <p class="page-sub">(กำลังพัฒนา)</p>

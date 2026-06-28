@@ -3,7 +3,13 @@ import { computed } from 'vue';
 import { useData } from '../stores/data';
 
 const data = useData();
-const emit = defineEmits<{ go: [dest: string] }>();
+const emit = defineEmits<{ go: [dest: string, payload?: { start: string }] }>();
+
+const wizardCards = [
+  { cls: 'j-students', start: 'students', ico: '👥', title: 'เพิ่มรายชื่อนักเรียน', desc: 'เลือกห้อง แล้วอัปโหลดหรือวางจาก Excel' },
+  { cls: 'j-measure', start: 'measures', ico: '📏', title: 'บันทึกการวัด', desc: 'กรอกน้ำหนัก/ส่วนสูงทีละห้อง' },
+  { cls: 'j-export', start: 'export', ico: '📤', title: 'ส่งออกรายงาน', desc: 'ดาวน์โหลดไฟล์เพื่อส่งให้หน่วยงาน' },
+];
 
 const teacherName = computed(() => data.setup.teacher || '');
 
@@ -33,7 +39,10 @@ const noStudents = computed(() => data.students.length === 0);
         <div class="eyebrow" style="color: oklch(1 0 0 / 0.85)">📌 วันนี้ควรทำอะไร</div>
         <div v-if="noStudents" class="today-line">ยังไม่มีข้อมูลนักเรียน</div>
         <div v-else class="today-line">ยังมี {{ incompleteRooms }} ห้องที่ยังวัดไม่ครบในรอบนี้</div>
-        <button class="btn lg" style="background: #fff; color: var(--brand-strong); border: none" @click="emit('go', 'measure')">
+        <button v-if="noStudents" class="btn lg" style="background: #fff; color: var(--brand-strong); border: none" @click="emit('go', 'wizard', { start: 'students' })">
+          เพิ่มรายชื่อนักเรียน →
+        </button>
+        <button v-else class="btn lg" style="background: #fff; color: var(--brand-strong); border: none" @click="emit('go', 'wizard', { start: 'measures' })">
           บันทึกการวัดต่อ →
         </button>
       </div>
@@ -43,11 +52,20 @@ const noStudents = computed(() => data.students.length === 0);
       </div>
     </div>
 
+    <!-- start a task — launches the wizard directly -->
+    <div class="section-title">เริ่มงานได้เลย</div>
+    <div class="hub-flow" style="margin-bottom: var(--s5)">
+      <button v-for="c in wizardCards" :key="c.start" class="jcard" :class="c.cls" @click="emit('go', 'wizard', { start: c.start })">
+        <span class="medallion">{{ c.ico }}</span>
+        <span class="jt">{{ c.title }}</span>
+        <span class="jd">{{ c.desc }}</span>
+        <span class="jgo">เริ่มเลย <span class="arr">→</span></span>
+      </button>
+    </div>
+
     <!-- quick links -->
     <div class="quick">
       <button class="q" @click="emit('go', 'students')"><span>🔎</span>ค้นหานักเรียน</button>
-      <button class="q" @click="emit('go', 'reports')"><span>📋</span>ออกรายงาน</button>
-      <button class="q" @click="emit('go', 'import')"><span>📥</span>นำเข้ารายชื่อ</button>
       <button class="q" @click="emit('go', 'promotion')"><span>🎓</span>เลื่อนชั้นปีใหม่</button>
     </div>
 
@@ -98,7 +116,7 @@ const noStudents = computed(() => data.students.length === 0);
 .ts-num { font-size: 44px; font-weight: 800; line-height: 1; }
 @media (max-width: 640px) { .today { flex-direction: column; } .today-side { width: auto; } }
 
-.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin-bottom: var(--s5); }
+.quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s3); margin-bottom: var(--s5); }
 @media (max-width: 640px) { .quick { grid-template-columns: repeat(2, 1fr); } }
 .q {
   display: flex; flex-direction: column; align-items: center; gap: 6px;

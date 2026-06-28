@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import AddStudentsWizard from './AddStudentsWizard.vue';
 import AddMeasuresWizard from './AddMeasuresWizard.vue';
 import ExportWizard from './ExportWizard.vue';
 
-const emit = defineEmits<{ go: [dest: string] }>();
+const emit = defineEmits<{ go: [dest: string]; flow: [active: boolean] }>();
 
 type Active = 'students' | 'measures' | 'export' | null;
-const active = ref<Active>(null);
+const props = defineProps<{ start?: string | null }>();
+const active = ref<Active>((props.start as Active) ?? null);
+// allow launching a specific wizard directly (e.g. from the home page)
+watch(() => props.start, (s) => { active.value = (s as Active) ?? null; });
+// tell the shell to hide its app top bar while a wizard sub-flow is open
+watch(active, (v) => emit('flow', v !== null), { immediate: true });
 
 const cards: { id: Exclude<Active, null>; cls: string; no: string; ico: string; title: string; desc: string; go: string }[] = [
   { id: 'students', cls: 'j-students', no: 'ขั้นที่ 1', ico: '👥', title: 'เพิ่มรายชื่อนักเรียน', desc: 'เลือกชั้น/ห้อง ดาวน์โหลดแม่แบบ กรอกรายชื่อ แล้วอัปโหลดหรือวางจาก Excel', go: 'เริ่มเพิ่มรายชื่อ' },
