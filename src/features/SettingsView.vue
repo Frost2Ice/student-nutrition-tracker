@@ -267,7 +267,7 @@ function doReset() {
           <div class="goal-t">ผู้ช่วยสำรองและกู้คืนข้อมูล</div>
           <div class="goal-d">พาทำทีละขั้น เลือกสำรองหรือกู้คืน แล้วดาวน์โหลดหรือเปิดไฟล์ได้เลย</div>
         </div>
-        <button class="btn primary" @click="emit('go', 'backup')">เปิดผู้ช่วยสำรองข้อมูล</button>
+        <button class="btn primary" @click="emit('go', 'wizard-backup')">เปิดผู้ช่วยสำรองข้อมูล</button>
       </div>
     </div>
 

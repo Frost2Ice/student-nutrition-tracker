@@ -15,11 +15,14 @@ import SettingsView from './features/SettingsView.vue';
 import PromotionView from './features/PromotionView.vue';
 import ReportsView from './features/ReportsView.vue';
 import WizardHubView from './features/wizard/WizardHubView.vue';
+import AddStudentsWizard from './features/wizard/AddStudentsWizard.vue';
+import AddMeasuresWizard from './features/wizard/AddMeasuresWizard.vue';
+import ExportWizard from './features/wizard/ExportWizard.vue';
 import BackupRestoreWizard from './features/wizard/BackupRestoreWizard.vue';
 import ImportDialog from './components/ImportDialog.vue';
 import AppHeader from './components/AppHeader.vue';
 
-type Overlay = 'onboarding' | 'import' | 'promotion' | 'backup' | null;
+type Overlay = 'onboarding' | 'import' | 'promotion' | null;
 
 const data = useData();
 const header = useHeader();
@@ -66,9 +69,11 @@ const nav: { id: Dest; label: string; ico: string }[] = [
   { id: 'students-poc', label: 'นักเรียน', ico: '👥' },
   { id: 'reports', label: 'รายงาน', ico: '📋' },
   { id: 'settings', label: 'ตั้งค่า', ico: '⚙️' },
-  { id: 'wizard', label: 'ผู้ช่วยจัดการข้อมูล', ico: '🧭' },
-  // Legacy entries hidden during Student Workspace migration; routes + views kept
-  // as a safety net (still reachable in code, just not in nav):
+  // Hidden from nav; routes + views kept as a safety net (still reachable in code):
+  //   { id: 'wizard', label: 'ผู้ช่วยจัดการข้อมูล', ico: '🧭' } — the home page is now
+  //     the launcher; its guided-flow cards deep-link to the routed sub-wizards
+  //     (#/wizard/import-students · import-measurements · export-reports · backup)
+  //     so Back behaves.
   //   { id: 'students', label: 'นักเรียน', ico: '👥' },
   //   { id: 'measure', label: 'บันทึกการวัด', ico: '📏' },
 ];
@@ -85,7 +90,7 @@ const destLabel = computed(() => nav.find((n) => n.id === route.current)?.label 
 watch(() => route.current, () => { showProfile.value = false; });
 
 function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string; grade?: string; room?: string }) {
-  if (target === 'import' || target === 'promotion' || target === 'onboarding' || target === 'backup') {
+  if (target === 'import' || target === 'promotion' || target === 'onboarding') {
     if (target === 'import' && payload && 'grade' in payload && payload.grade && payload.room) {
       importTarget.value = { grade: payload.grade, room: payload.room };
     }
@@ -192,6 +197,10 @@ const periodLine = computed(() => {
           <SettingsView v-else-if="route.current === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="route.current === 'reports'" key="reports" />
           <WizardHubView v-else-if="route.current === 'wizard'" key="wizard" :start="wizardStart" @go="go" />
+          <AddStudentsWizard v-else-if="route.current === 'wizard-students'" key="w-students" @done="go('home')" @exit="go('home')" />
+          <AddMeasuresWizard v-else-if="route.current === 'wizard-measures'" key="w-measures" @done="go('home')" @exit="go('home')" />
+          <ExportWizard v-else-if="route.current === 'wizard-export'" key="w-export" @done="go('home')" @exit="go('home')" />
+          <BackupRestoreWizard v-else-if="route.current === 'wizard-backup'" key="w-backup" @done="go('home')" @exit="go('home')" />
           <div v-else class="container" :key="route.current">
             <h1 class="page-title">{{ destLabel }}</h1>
             <p class="page-sub">(กำลังพัฒนา)</p>
@@ -208,7 +217,7 @@ const periodLine = computed(() => {
   </div>
 
   <!-- FULL-PAGE FOCUSED FLOWS (first-run setup, high-stakes promotion) -->
-  <div v-if="overlay === 'onboarding' || overlay === 'promotion' || overlay === 'backup'" class="overlay-wrap">
+  <div v-if="overlay === 'onboarding' || overlay === 'promotion'" class="overlay-wrap">
     <div class="overlay-bar">
       <div class="brand-logo" style="width: 30px; height: 30px; font-size: 16px">🍎</div>
       <div class="ob-title">{{ overlayTitle[overlay] }}</div>
@@ -222,11 +231,6 @@ const periodLine = computed(() => {
     />
     <PromotionView
       v-else-if="overlay === 'promotion'"
-      @done="closeOverlay"
-      @exit="closeOverlay"
-    />
-    <BackupRestoreWizard
-      v-else-if="overlay === 'backup'"
       @done="closeOverlay"
       @exit="closeOverlay"
     />

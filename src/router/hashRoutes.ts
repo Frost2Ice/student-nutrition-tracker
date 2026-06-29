@@ -1,12 +1,20 @@
 export type Dest =
-  | 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings' | 'wizard';
+  | 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings'
+  | 'wizard' | 'wizard-students' | 'wizard-measures' | 'wizard-export' | 'wizard-backup';
 
 const PATH_TO_DEST: Record<string, Dest> = {
   '/': 'home',
   '/students': 'students-poc',
   '/reports': 'reports',
   '/settings': 'settings',
-  '/data': 'wizard',
+  '/wizard': 'wizard',
+  // Guided workflows are first-class pages so browser Back / refresh / deep-link
+  // all behave; each is its own hash entry. Named by workflow (not by data) so the
+  // URLs are self-documenting, and /data stays free for a future data-management area.
+  '/wizard/import-students': 'wizard-students',
+  '/wizard/import-measurements': 'wizard-measures',
+  '/wizard/export-reports': 'wizard-export',
+  '/wizard/backup': 'wizard-backup',
 };
 
 const DEST_TO_PATH: Partial<Record<Dest, string>> = {
@@ -14,7 +22,11 @@ const DEST_TO_PATH: Partial<Record<Dest, string>> = {
   'students-poc': '/students',
   reports: '/reports',
   settings: '/settings',
-  wizard: '/data',
+  wizard: '/wizard',
+  'wizard-students': '/wizard/import-students',
+  'wizard-measures': '/wizard/import-measurements',
+  'wizard-export': '/wizard/export-reports',
+  'wizard-backup': '/wizard/backup',
 };
 
 /** Normalize a raw `location.hash` to a routable Dest. Unknown/empty -> 'home'. */
