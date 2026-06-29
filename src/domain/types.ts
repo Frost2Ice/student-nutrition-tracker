@@ -35,3 +35,34 @@ export interface Setup {
   teacher: string;
   maxGrade: string;
 }
+
+export interface SchoolIdentity {
+  school: string;
+  ministry: string;
+  department: string;
+  subdistrict: string;
+  district: string;
+  province: string;
+}
+
+export interface YearSnapshot {
+  year: string;
+  createdAt: number;
+  teacher: string;
+  maxGrade: string;
+  classrooms: { grade: string; rooms: string[] }[];
+  students: Student[];
+  measures: Measurement[];
+}
+
+export type YearStatus = 'active' | 'archived';
+export interface YearMeta { year: string; status: YearStatus; createdAt: number }
+export interface SchoolManifest { schemaVersion: 2; years: YearMeta[] }
+export interface SchoolFile { schemaVersion: 2; identity: SchoolIdentity; years: YearSnapshot[] }
+
+export class ReadonlyYearError extends Error {
+  constructor(year: string) {
+    super(`ปีการศึกษา ${year} เก็บถาวรแล้ว (อ่านอย่างเดียว)`);
+    this.name = 'ReadonlyYearError';
+  }
+}

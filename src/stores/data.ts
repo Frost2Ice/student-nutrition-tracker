@@ -1,16 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { Student, Measurement, Setup, Term, Round } from '../domain/types';
+import type { Student, Measurement, Setup, Term, Round, YearSnapshot } from '../domain/types';
+import { ReadonlyYearError } from '../domain/types';
 import { calcNutrition } from '../domain/nutrition/engine';
 import { latestPerStudent } from '../domain/nutrition/latest';
 import { GRADE_ORDER } from '../domain/grade/ladder';
+import { splitSetup } from '../domain/school/migrate';
+import { useSchool } from './school';
 
-const KS = 'ntr2_students';
-const KM = 'ntr2_measures';
-const KST = 'ntr2_setup';
-const KP = 'ntr2_period';
 const KB = 'ntr2_backup_at';
-const KC = 'ntr2_classrooms';
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -21,32 +19,79 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
+function emptyYear(year: string): YearSnapshot {
+  return { year, createdAt: Date.now(), teacher: '', maxGrade: '', classrooms: [], students: [], measures: [] };
+}
+
 export const useData = defineStore('data', () => {
-  const classrooms = ref<{ grade: string; rooms: string[] }[]>(
-    load<{ grade: string; rooms: string[] }[]>(KC, []),
-  );
-  const students = ref<Student[]>(load<Student[]>(KS, []));
-  const measures = ref<Measurement[]>(load<Measurement[]>(KM, []));
-  const period = ref<{ year: string }>(
-    (() => {
-      const raw = load<{ year: string; term?: string; round?: string }>(KP, { year: '' });
-      return { year: raw.year ?? '' };
-    })(),
-  );
+  const school = useSchool();
+
+  // There must always be an editable active year to land on.
+  if (!school.activeYear) school.createYear(emptyYear(''));
+
+  // Which year is on screen (defaults to the active, editable one).
+  const viewingYear = ref<string>(school.activeYear!);
+  const createdAt = ref<number>(Date.now());
+
+  const classrooms = ref<{ grade: string; rooms: string[] }[]>([]);
+  const students = ref<Student[]>([]);
+  const measures = ref<Measurement[]>([]);
+  const teacher = ref<string>('');
+  const maxGrade = ref<string>('');
   const measureSession = ref<{ term: Term; round: Round } | null>(null);
 
-  const lastBackupAt = ref<number>(load<number>(KB, 0));
+  /** Load the viewed year's snapshot into the working refs. */
+  function hydrate(year: string) {
+    const snap = school.loadYear(year) ?? emptyYear(year);
+    createdAt.value = snap.createdAt;
+    classrooms.value = snap.classrooms;
+    students.value = snap.students;
+    measures.value = snap.measures;
+    teacher.value = snap.teacher;
+    maxGrade.value = snap.maxGrade;
+  }
+  hydrate(viewingYear.value);
 
+  const isReadonly = computed(() => viewingYear.value !== school.activeYear);
+
+  function assertWritable() {
+    if (isReadonly.value) throw new ReadonlyYearError(viewingYear.value);
+  }
+
+  function viewYear(year: string) { viewingYear.value = year; hydrate(year); }
+  function viewActive() {
+    if (school.activeYear) { viewingYear.value = school.activeYear; hydrate(school.activeYear); }
+  }
+
+  // setup is a reassembled view: shared identity + the viewed year's teacher/maxGrade.
+  const setup = computed<Setup>(() => ({ ...school.identity, teacher: teacher.value, maxGrade: maxGrade.value }));
+  const period = computed<{ year: string }>(() => ({ year: viewingYear.value }));
+
+  const lastBackupAt = ref<number>(load<number>(KB, 0));
   const backupOverdueDays = computed(() => {
     if (lastBackupAt.value === 0) return 999999;
     return Math.floor((Date.now() - lastBackupAt.value) / 86400000);
   });
-
   function markBackup() {
     lastBackupAt.value = Date.now();
     localStorage.setItem(KB, String(lastBackupAt.value));
   }
 
+  /** Write the working refs back into the viewed year's snapshot (active only). */
+  function persist() {
+    if (isReadonly.value) return;
+    school.saveYear({
+      year: viewingYear.value,
+      createdAt: createdAt.value,
+      teacher: teacher.value,
+      maxGrade: maxGrade.value,
+      classrooms: classrooms.value,
+      students: students.value,
+      measures: measures.value,
+    });
+  }
+
+  /** Wholesale restore (legacy backup import): becomes the active year. */
   function replaceAll(parsed: {
     students: Student[];
     measures: Measurement[];
@@ -54,36 +99,22 @@ export const useData = defineStore('data', () => {
     period: { year: string };
     classrooms?: { grade: string; rooms: string[] }[];
   }) {
-    students.value = parsed.students;
-    measures.value = parsed.measures;
-    setup.value = parsed.setup;
-    period.value = parsed.period;
-    classrooms.value = parsed.classrooms ?? [];
-    persist();
-  }
-
-  const setup = ref<Setup>(
-    load<Setup>(KST, {
-      school: '',
-      ministry: '',
-      department: '',
-      subdistrict: '',
-      district: '',
-      province: '',
-      teacher: '',
-      maxGrade: '',
-    }),
-  );
-
-  function persist() {
-    localStorage.setItem(KS, JSON.stringify(students.value));
-    localStorage.setItem(KM, JSON.stringify(measures.value));
-    localStorage.setItem(KST, JSON.stringify(setup.value));
-    localStorage.setItem(KP, JSON.stringify(period.value));
-    localStorage.setItem(KC, JSON.stringify(classrooms.value));
+    const { identity, teacher: t, maxGrade: mg } = splitSetup(parsed.setup);
+    school.setIdentity(identity);
+    school.createYear({
+      year: parsed.period.year,
+      createdAt: Date.now(),
+      teacher: t,
+      maxGrade: mg,
+      classrooms: parsed.classrooms ?? [],
+      students: parsed.students,
+      measures: parsed.measures,
+    });
+    viewYear(parsed.period.year);
   }
 
   function setClassrooms(list: { grade: string; rooms: string[] }[]) {
+    assertWritable();
     classrooms.value = list;
     persist();
   }
@@ -115,7 +146,12 @@ export const useData = defineStore('data', () => {
   }
 
   function setPeriod(p: { year: string }) {
-    period.value = p;
+    assertWritable();
+    const old = viewingYear.value;
+    if (p.year !== old) {
+      school.renameYear(old, p.year);
+      viewingYear.value = p.year;
+    }
     persist();
   }
 
@@ -126,11 +162,13 @@ export const useData = defineStore('data', () => {
   }
 
   function addStudent(s: Student) {
+    assertWritable();
     students.value.push(s);
     persist();
   }
 
   function updateStudent(id: string, patch: Partial<Student>) {
+    assertWritable();
     const s = findStudent(id);
     if (s) {
       Object.assign(s, patch);
@@ -139,12 +177,14 @@ export const useData = defineStore('data', () => {
   }
 
   function deleteStudent(id: string) {
+    assertWritable();
     students.value = students.value.filter((s) => s.id !== id);
     measures.value = measures.value.filter((m) => m.studentId !== id);
     persist();
   }
 
   function addMeasure(m: Measurement) {
+    assertWritable();
     measures.value.push(m);
     persist();
   }
@@ -155,6 +195,7 @@ export const useData = defineStore('data', () => {
    * Returns 'added' or 'updated' so callers can report accurately.
    */
   function upsertMeasure(m: Measurement): 'added' | 'updated' {
+    assertWritable();
     const idx = measures.value.findIndex(
       (x) =>
         x.studentId === m.studentId &&
@@ -173,6 +214,7 @@ export const useData = defineStore('data', () => {
   }
 
   function deleteMeasure(m: Measurement) {
+    assertWritable();
     measures.value = measures.value.filter((x) => x !== m);
     persist();
   }
@@ -188,7 +230,11 @@ export const useData = defineStore('data', () => {
   }
 
   function saveSetup(next: Setup) {
-    setup.value = next;
+    assertWritable();
+    const { identity, teacher: t, maxGrade: mg } = splitSetup(next);
+    school.setIdentity(identity);
+    teacher.value = t;
+    maxGrade.value = mg;
     persist();
   }
 
@@ -305,6 +351,10 @@ export const useData = defineStore('data', () => {
     setup,
     period,
     measureSession,
+    isReadonly,
+    viewingYear,
+    viewYear,
+    viewActive,
     lastBackupAt,
     backupOverdueDays,
     markBackup,
