@@ -261,8 +261,10 @@ nav → sticky → backdrop → modal → toast.
 - Make destructive-sounding steps prove **data is moved, not lost**: export first,
   show the exact filename (e.g. `รายชื่อนักเรียนจบการศึกษา ปีการศึกษา 2569.xlsx`), then
   remove — only after the export succeeds.
-- Treat the **Promotion Wizard** as the flagship: unhurried, step-by-step, forced
-  backup, reversible (the academic year is never permanently locked).
+- Treat the **New Academic Year flow** (evolved Promotion Wizard) as the flagship:
+  unhurried, step-by-step, forced backup, non-destructive — it *creates* the next
+  year and *archives* (never deletes) the current one. The active year is always
+  editable; archived years are read-only snapshots, still browsable/exportable.
 - Keep copy plain, warm, and Thai; pair every status color with a label.
 - Default to the safe path (promote +1, merge-not-replace) and let teachers adjust
   only the exceptions.

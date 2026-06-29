@@ -48,8 +48,10 @@ should lower anxiety: never shout, never overwhelm, always show the next step.
    redundant inputs.
 4. **Prevent mistakes; never trap.** Validate before submit; confirm destructive
    actions with plain-language stakes; always leave a way back. Guide away from
-   errors, but never lock the user into an incorrect state (e.g. the academic year
-   stays editable even after promotion).
+   errors, but never trap the user in an incorrect state. The **active** year is
+   always fully editable; **archived** years are intentionally read-only (to protect
+   the historical snapshot), but never a dead end — they stay browsable, exportable,
+   and recoverable, and a new year can always be created.
 5. **Reassure about data.** Destructive-sounding actions (graduation, transfer-out)
    must make clear data is *moved, not lost*: export first, show the saved
    filename, then remove.
@@ -63,8 +65,10 @@ should lower anxiety: never shout, never overwhelm, always show the next step.
 9. **Quietly trustworthy.** Motion and color convey state, never decorate.
 
 Priority order when principles conflict: confidence > efficiency · guidance >
-documentation · simplicity > flexibility · current data > historical administration
-· nutrition tracking > student administration.
+documentation · simplicity > flexibility · nutrition tracking > student
+administration. *(The former "current data > historical administration" rule is
+retired: historical years are now first-class immutable snapshots, preserved and
+browsable read-only — they are still never **administered**, only kept.)*
 
 ## The Dashboard
 A **workflow dashboard**, not an administration dashboard. It answers one question:
@@ -72,35 +76,50 @@ A **workflow dashboard**, not an administration dashboard. It answers one questi
 roster, change academic year, export reports), not a wall of stats.
 
 ## Flagship Workflows
-The **Academic Year Promotion Wizard** is the product's most important UX flow,
-not just a feature. It is the once-a-year moment a non-technical teacher most fears
-breaking things. It must be unhurried, fully explained step by step, reversible
-where possible, and must prove no data is lost before removing anyone. Canonical
-flow: explain → mandatory backup → review promotion → review graduating → export
-graduates (with full measurement history) → show archive filename → remove from
-active registry → complete → clear success summary.
+The **New Academic Year flow** (the evolved Promotion Wizard) is the product's most
+important UX flow, not just a feature. It is the once-a-year moment a non-technical
+teacher most fears breaking things. It must be unhurried, fully explained step by
+step, and must prove no data is lost: it **creates** the next year rather than
+overwriting the current one. Canonical flow: explain (this year is kept forever, a
+new year is created) → mandatory backup → name the new year + carry settings →
+review promotion → review graduating → export graduates (with full measurement
+history) → confirm → freeze the current year as a read-only archive + open the new
+active year → clear success summary. The prior year is never deleted, only archived,
+so the flow is inherently recoverable.
 
-## Student Lifecycle (kept deliberately simple)
-- **One living roster, run endlessly.** The app holds a single rolling roster of
-  *currently-enrolled* students — never a separate per-year roster. The school
-  runs it year after year: promotion rolls everyone forward a grade, graduation
-  evicts the top grade. This keeps the roster a bounded window, not an
-  ever-growing multi-year store. A per-year-roster model (duplicating students
-  into each new academic year) was deliberately rejected — promotion/graduation
-  already give the year roll, history is preserved on measurements, and
-  duplication would add id-collision and edit-propagation problems for no gain.
-- **Registry = current state only** (id, name, gender, dob, current grade/room). No
-  history, no enrolment timeline. Exists only to support measurements.
-- **Measurements = immutable history**, each snapshotting academic year / term /
-  round / grade / classroom; never change after promotion or room moves.
-- **New students:** manual add or Excel import.
-- **Transfer-out / graduated:** export the student with full measurement history,
-  then remove from the active registry.
-- **Returning student:** duplicate รหัส is detected; re-import / restore from the
-  exported archive. Student IDs always unique.
+## Student Lifecycle — snapshot-first, year as the data boundary
+*(Supersedes the earlier rolling-roster model. Decision 2026-06-29: each Academic
+Year is the primary data boundary and an immutable snapshot — not a side effect of a
+single mutated live roster. See `docs/superpowers/specs/2026-06-29-year-based-dataset-design.md`.)*
+
+- **The Academic Year is the unit of data.** The school holds one **active** year
+  (editable) plus any number of **archived** years (`เก็บถาวร`, read-only). Each
+  year is a self-contained snapshot: its own students, classrooms, measurements,
+  teacher, and max-grade setting. School identity (name, ministry, district…) is a
+  single shared root, not copied per year.
+- **Promotion creates the next year; it never mutates the current one.** Rolling to
+  a new year copies students forward (carrying a stable `studentId`), advances
+  grades, and starts with empty measurements. The previous year freezes into a
+  read-only archive — nothing is overwritten or deleted to move forward.
+- **Within the active year, the registry is current state** (id, name, gender, dob,
+  grade/room). No enrolment *timeline* inside a year. History lives across years as
+  whole frozen snapshots, browsable read-only — never an administrative audit log.
+- **Measurements stay immutable**, each stamping year / term / round / grade /
+  classroom; they belong to their year's snapshot.
+- **Cross-year history is lightweight, via `studentId`.** To show a student across
+  years, collect measures from each year's snapshot where `studentId` matches. No
+  Enrollment entity, no normalized relational model — the year count is small.
+- **New students:** manual add or Excel import (into the active year).
+- **Graduated / transfer-out:** during year rollover, graduates are simply not
+  copied into the new year; the frozen prior year keeps them with full history.
+  Export-then-remove reassurance still applies for mid-year departures.
+- **Returning student:** duplicate รหัส detected; re-import / restore. Student IDs
+  unique within a year.
 - **Import** is a primary workflow: preview, validation, plain-Thai error
   explanation, duplicate detection, bulk conflict resolution; handle messy real
   Excel files gracefully.
+- **Backup/restore is year-aware:** export a single Academic Year (self-contained,
+  portable) or the whole school; year-import merges, full-import replaces.
 
 ## Out of Scope
 Student Information System, medical records, clinic visits, symptom logging,
