@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'HomeView' });
 import { computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { useHeader } from '../stores/header';

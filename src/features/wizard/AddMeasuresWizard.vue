@@ -1,5 +1,6 @@
 <!-- src/features/wizard/AddMeasuresWizard.vue -->
 <script setup lang="ts">
+defineOptions({ name: 'AddMeasuresWizard' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
 import { useHeader } from '../../stores/header';

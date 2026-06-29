@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'WizardHubView' });
 import { ref, watch } from 'vue';
 import AddStudentsWizard from './AddStudentsWizard.vue';
 import AddMeasuresWizard from './AddMeasuresWizard.vue';

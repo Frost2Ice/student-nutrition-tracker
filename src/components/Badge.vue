@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'Badge' });
 import { badgeClass } from '../ui/labels';
 defineProps<{ label: string }>();
 </script>

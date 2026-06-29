@@ -1,5 +1,6 @@
 <!-- src/features/wizard/ExportWizard.vue -->
 <script setup lang="ts">
+defineOptions({ name: 'ExportWizard' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
 import { useHeader } from '../../stores/header';

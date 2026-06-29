@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'ArchivedBanner' });
 import { useData } from '../stores/data';
 
 const data = useData();

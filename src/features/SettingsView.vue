@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'SettingsView' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { useSchool } from '../stores/school';

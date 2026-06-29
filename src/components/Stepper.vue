@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'Stepper' });
 defineProps<{ steps: string[]; current: number }>();
 </script>
 

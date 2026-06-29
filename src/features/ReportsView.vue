@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'ReportsView' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { useSchool } from '../stores/school';

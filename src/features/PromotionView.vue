@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'PromotionView' });
 import { ref, computed, onMounted } from 'vue';
 import Stepper from '../components/Stepper.vue';
 import { useData } from '../stores/data';

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'ImportDialog' });
 import { ref, computed, watch } from 'vue';
 import Dialog from './Dialog.vue';
 import ThaiDateField from '../features/ThaiDateField.vue';

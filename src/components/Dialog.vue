@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'Dialog' });
 import { ref, watch, onBeforeUnmount } from 'vue';
 
 const props = defineProps<{ open: boolean; title?: string }>();

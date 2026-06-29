@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'YearSwitcher' });
 import { computed } from 'vue';
 import Dialog from './Dialog.vue';
 import { useData } from '../stores/data';

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'AppHeader' });
 import { computed } from 'vue';
 import { useData } from '../stores/data';
 import { useHeader, effectiveBack } from '../stores/header';

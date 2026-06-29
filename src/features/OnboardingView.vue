@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'OnboardingView' });
 import { ref } from 'vue';
 import { useData } from '../stores/data';
 import { GRADE_ORDER } from '../domain/grade/ladder';

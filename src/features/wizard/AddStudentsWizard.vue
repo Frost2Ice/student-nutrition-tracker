@@ -1,5 +1,6 @@
 <!-- src/features/wizard/AddStudentsWizard.vue -->
 <script setup lang="ts">
+defineOptions({ name: 'AddStudentsWizard' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
 import { useHeader } from '../../stores/header';

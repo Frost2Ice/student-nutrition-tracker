@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'StudentsView' });
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { Chart } from 'chart.js/auto';
 import { useData } from '../stores/data';

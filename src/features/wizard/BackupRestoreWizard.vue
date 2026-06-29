@@ -1,5 +1,6 @@
 <!-- src/features/wizard/BackupRestoreWizard.vue -->
 <script setup lang="ts">
+defineOptions({ name: 'BackupRestoreWizard' });
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../../stores/data';
 import { useSchool } from '../../stores/school';

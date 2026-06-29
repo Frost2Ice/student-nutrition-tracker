@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'ThaiDateField' });
 import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{

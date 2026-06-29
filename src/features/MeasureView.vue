@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'MeasureView' });
 import { ref, computed, watch, onBeforeUnmount, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { validateWeight, validateHeight, validateThaiDate, round1 } from '../domain/validation/rules';
