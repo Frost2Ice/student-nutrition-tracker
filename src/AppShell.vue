@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+defineOptions({ name: 'AppShell' });
+import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from './stores/data';
 import { useHeader } from './stores/header';
+import { useRoute } from './stores/route';
+import type { Dest } from './router/hashRoutes';
 import { parseBackup } from './domain/transfer/backup';
 import OnboardingView from './features/OnboardingView.vue';
 import HomeView from './features/HomeView.vue';
@@ -16,16 +19,18 @@ import BackupRestoreWizard from './features/wizard/BackupRestoreWizard.vue';
 import ImportDialog from './components/ImportDialog.vue';
 import AppHeader from './components/AppHeader.vue';
 
-type Dest = 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings' | 'wizard';
 type Overlay = 'onboarding' | 'import' | 'promotion' | 'backup' | null;
 
 const data = useData();
 const header = useHeader();
+const route = useRoute();
 
 const welcome = ref<'choose' | 'restore'>('choose');
 const restoreError = ref('');
 const restoreInput = ref<HTMLInputElement | null>(null);
-const dest = ref<Dest>('home');
+// Whether the #/students route shows the legacy student profile (StudentsView)
+// instead of the Workspace (StudentsPocView). In-page state, not its own route.
+const showProfile = ref(false);
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
 const focusStudent = ref<string | null>(null);
@@ -72,7 +77,12 @@ const overlayTitle: Record<string, string> = {
   backup: 'ผู้ช่วยสำรองและกู้คืนข้อมูล',
 };
 
-const destLabel = computed(() => nav.find((n) => n.id === dest.value)?.label ?? '');
+const destLabel = computed(() => nav.find((n) => n.id === route.current)?.label ?? '');
+
+// Leaving the #/students route (or re-entering it via Back/Forward) drops the
+// profile overlay so the Workspace shows. Opening a profile happens while
+// already on #/students, so navigate() is a no-op there and this won't fire.
+watch(() => route.current, () => { showProfile.value = false; });
 
 function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string; grade?: string; room?: string }) {
   if (target === 'import' || target === 'promotion' || target === 'onboarding' || target === 'backup') {
@@ -80,24 +90,29 @@ function go(target: string, payload?: { grade: string; room: string } | { start:
       importTarget.value = { grade: payload.grade, room: payload.room };
     }
     overlay.value = target as Overlay;
+  } else if (target === 'students' && payload && 'focus' in payload) {
+    // Open the legacy student profile as in-page state of #/students.
+    focusStudent.value = payload.focus;
+    studentReturn.value = payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
+    route.navigate('students-poc');
+    showProfile.value = true;
+    header.setHeader({ title: '', back: null, context: 'year' });
   } else {
     if (target === 'wizard') {
       wizardStart.value = payload && 'start' in payload ? payload.start : null;
     }
-    if (target === 'students' && payload && 'focus' in payload) {
-      focusStudent.value = payload.focus;
-      studentReturn.value = payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
-    }
     if (target === 'students-poc') {
       pocReopen.value = payload && 'grade' in payload && payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
     }
-    dest.value = target as Dest;
+    route.navigate(target as Dest);
     // Set the header optimistically so the bar never blanks during the
     // out-in view transition; the destination view refines it on mount.
     header.setHeader({ title: nav.find((n) => n.id === target)?.label ?? '', back: null, context: 'year' });
   }
   window.scrollTo({ top: 0 });
 }
+
+onMounted(() => route.start());
 function closeOverlay() {
   overlay.value = null;
   importTarget.value = null;
@@ -159,25 +174,25 @@ const periodLine = computed(() => {
         </div>
       </div>
       <div class="period-chip" style="margin-bottom: var(--s4)" title="เปลี่ยนได้ที่ตั้งค่า">📅 {{ periodLine }}</div>
-      <button v-for="n in nav" :key="n.id" class="nav-item" :class="{ active: dest === n.id }" @click="go(n.id)">
+      <button v-for="n in nav" :key="n.id" class="nav-item" :class="{ active: route.current === n.id }" @click="go(n.id)">
         <span class="ico">{{ n.ico }}</span>{{ n.label }}
       </button>
       <div class="sidebar-foot">เกณฑ์ กรมอนามัย พ.ศ. 2564</div>
     </aside>
 
     <div class="main">
-      <AppHeader :go-home="() => go('home')" :is-home="dest === 'home'" />
+      <AppHeader :go-home="() => go('home')" :is-home="route.current === 'home'" />
 
       <main class="content">
         <Transition name="view" mode="out-in">
-          <HomeView v-if="dest === 'home'" key="home" @go="go" />
-          <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" :return-room="studentReturn" @go="go" @focused="focusStudent = null" />
-          <StudentsPocView v-else-if="dest === 'students-poc'" key="students-poc" :reopen="pocReopen" @go="go" @reopened="pocReopen = null" />
-          <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
-          <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
-          <ReportsView v-else-if="dest === 'reports'" key="reports" />
-          <WizardHubView v-else-if="dest === 'wizard'" key="wizard" :start="wizardStart" @go="go" />
-          <div v-else class="container" :key="dest">
+          <HomeView v-if="route.current === 'home'" key="home" @go="go" />
+          <StudentsView v-else-if="route.current === 'students-poc' && showProfile" key="student-profile" :focus-id="focusStudent" :return-room="studentReturn" @go="go" @focused="focusStudent = null" />
+          <StudentsPocView v-else-if="route.current === 'students-poc'" key="students-poc" :reopen="pocReopen" @go="go" @reopened="pocReopen = null" />
+          <MeasureView v-else-if="route.current === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
+          <SettingsView v-else-if="route.current === 'settings'" key="settings" @go="go" />
+          <ReportsView v-else-if="route.current === 'reports'" key="reports" />
+          <WizardHubView v-else-if="route.current === 'wizard'" key="wizard" :start="wizardStart" @go="go" />
+          <div v-else class="container" :key="route.current">
             <h1 class="page-title">{{ destLabel }}</h1>
             <p class="page-sub">(กำลังพัฒนา)</p>
           </div>
@@ -186,7 +201,7 @@ const periodLine = computed(() => {
     </div>
 
     <nav class="bottomnav">
-      <button v-for="n in nav" :key="n.id" :class="{ active: dest === n.id }" @click="go(n.id)">
+      <button v-for="n in nav" :key="n.id" :class="{ active: route.current === n.id }" @click="go(n.id)">
         <span class="ico">{{ n.ico }}</span>{{ n.label }}
       </button>
     </nav>
@@ -202,7 +217,7 @@ const periodLine = computed(() => {
     </div>
     <OnboardingView
       v-if="overlay === 'onboarding'"
-      @done="closeOverlay(); dest = 'home'"
+      @done="closeOverlay(); route.navigate('home')"
       @exit="closeOverlay"
     />
     <PromotionView
