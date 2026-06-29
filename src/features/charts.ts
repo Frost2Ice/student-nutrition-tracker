@@ -66,7 +66,7 @@ function studentPoints(
   } as ChartDataset<'line'>;
 }
 
-const baseOpts = (xTitle: string, yTitle: string): ChartConfiguration<'line'>['options'] => ({
+const baseOpts = (xTitle: string, yTitle: string, xMax?: number): ChartConfiguration<'line'>['options'] => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
@@ -75,7 +75,7 @@ const baseOpts = (xTitle: string, yTitle: string): ChartConfiguration<'line'>['o
     legend: { labels: { font: { family: 'Sarabun' }, filter: (i) => i.text !== '_base' } },
   },
   scales: {
-    x: { type: 'linear', title: { display: true, text: xTitle, font: { family: 'Sarabun' } } },
+    x: { type: 'linear', max: xMax, title: { display: true, text: xTitle, font: { family: 'Sarabun' } } },
     y: { title: { display: true, text: yTitle, font: { family: 'Sarabun' } } },
   },
 });
@@ -129,7 +129,7 @@ export function buildHfa(student: Student, measures: Measurement[]): ChartConfig
   return {
     type: 'line',
     data: { datasets: [...zones(baseline, bands, 'middle'), pts] },
-    options: baseOpts('อายุ (ปี)', 'ส่วนสูง (ซม.)'),
+    options: baseOpts('อายุ (ปี)', 'ส่วนสูง (ซม.)', 19),
   };
 }
 
@@ -153,6 +153,6 @@ export function buildWfa(student: Student, measures: Measurement[]): ChartConfig
   return {
     type: 'line',
     data: { datasets: [...zones(baseline, bands, 'middle'), pts] },
-    options: baseOpts('อายุ (ปี)', 'น้ำหนัก (กก.)'),
+    options: baseOpts('อายุ (ปี)', 'น้ำหนัก (กก.)', 19),
   };
 }

@@ -3,32 +3,62 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { useHeader } from '../stores/header';
 import { calcNutrition } from '../domain/nutrition/engine';
-import type { Student } from '../domain/types';
+import { shortWfa, shortHfa } from '../domain/nutrition/labels';
+import type { Student, Term, Round, Measurement } from '../domain/types';
+import { defaultRound } from '../domain/measure/default-round';
 import { aoaToXlsxBlob, studentsToAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
-import ImportDialog from '../components/ImportDialog.vue';
-
-defineEmits<{ (e: 'go', target: string): void }>();
+defineEmits<{ (e: 'go', target: string, payload?: { focus: string }): void }>();
 
 const data = useData();
 const header = useHeader();
 
-type StatusCls = 'good' | 'warn' | 'bad' | 'neutral';
-function statusOf(s: Student): { label: string; cls: StatusCls; risk: boolean } {
-  const m = data.latest.get(s.id) ?? null;
-  if (!m) return { label: 'ยังไม่วัด', cls: 'neutral', risk: false };
-  const r = calcNutrition(s, m);
-  if (!r) return { label: 'ประเมินไม่ได้', cls: 'neutral', risk: false };
-  const w = r.wfh;
-  if (w === 'สมส่วน') return { label: w, cls: 'good', risk: false };
-  if (w === 'ท้วม' || w === 'ค่อนข้างผอม' || w === 'เริ่มอ้วน') return { label: w, cls: 'warn', risk: true };
-  return { label: w, cls: 'bad', risk: true }; // ผอม / อ้วน
+// ---- measurement round selector ----
+const sessTerm = ref<Term>('1');
+const sessRound = ref<Round>('1');
+
+const SESSIONS: { term: Term; round: Round; label: string }[] = [
+  { term: '1', round: '1', label: 'ภาคเรียนที่ 1 · ครั้งที่ 1' },
+  { term: '1', round: '2', label: 'ภาคเรียนที่ 1 · ครั้งที่ 2' },
+  { term: '2', round: '1', label: 'ภาคเรียนที่ 2 · ครั้งที่ 1' },
+  { term: '2', round: '2', label: 'ภาคเรียนที่ 2 · ครั้งที่ 2' },
+];
+
+function isActiveSession(term: Term, round: Round) {
+  return sessTerm.value === term && sessRound.value === round;
 }
-function roomRisk(grade: string, room: string): number {
-  return data.roomStudents(grade, room).filter((s) => statusOf(s).risk).length;
+function pickSession(term: Term, round: Round) {
+  sessTerm.value = term;
+  sessRound.value = round;
 }
-function progressClass(m: number, t: number): StatusCls { return t > 0 && m === t ? 'good' : m === 0 ? 'neutral' : 'warn'; }
-function progressText(m: number, t: number) { return t > 0 && m === t ? 'วัดครบ' : m === 0 ? 'ยังไม่วัด' : `วัดแล้ว ${m}/${t}`; }
+
+type Assess = { wfa: string; hfa: string; wfh: string; tall: boolean } | null;
+function assessFor(s: Student): { measure: Measurement | null; result: Assess } {
+  const m = data.findDuplicate(s.id, data.period.year, sessTerm.value, sessRound.value);
+  if (!m) return { measure: null, result: null };
+  return { measure: m, result: calcNutrition(s, m) };
+}
+
+const wfhClass: Record<string, string> = {
+  ผอม: 'bad', ค่อนข้างผอม: 'warn', สมส่วน: 'good', ท้วม: 'warn', เริ่มอ้วน: 'warn', อ้วน: 'bad',
+};
+const wfaClass: Record<string, string> = {
+  น้ำหนักน้อย: 'bad', น้ำหนักค่อนข้างน้อย: 'warn', น้ำหนักตามเกณฑ์: 'good',
+  น้ำหนักค่อนข้างมาก: 'warn', น้ำหนักมาก: 'bad',
+};
+const hfaClass: Record<string, string> = {
+  เตี้ย: 'bad', ค่อนข้างเตี้ย: 'warn', สูงตามเกณฑ์: 'good', ค่อนข้างสูง: 'good', สูง: 'good',
+};
+
+const assessMap = computed(() =>
+  new Map(roomStudents.value.map((s) => [s.id, assessFor(s)] as const)),
+);
+
+function rowRisk(s: Student): boolean {
+  const r = assessFor(s).result;
+  if (!r) return false;
+  return r.wfh !== 'สมส่วน';
+}
 
 // ---- navigation: map (grades+rooms in one) → students ----
 const view = ref<'map' | 'students'>('map');
@@ -39,6 +69,7 @@ function openRoom(g: string, r: string) {
   grade.value = g;
   room.value = r;
   riskOnly.value = false;
+  applyDefaultRound();
   view.value = 'students';
   window.scrollTo({ top: 0 });
 }
@@ -66,16 +97,30 @@ const searching = computed(() => search.value.trim().length > 0);
 // ---- student roster for the open room ----
 const riskOnly = ref(false);
 const roomStudents = computed(() => (grade.value && room.value ? data.roomStudents(grade.value, room.value) : []));
+const roomRiskCount = computed(() => roomStudents.value.filter(rowRisk).length);
 const currentRoomStudents = computed(() =>
-  riskOnly.value ? roomStudents.value.filter((s) => statusOf(s).risk) : roomStudents.value,
+  riskOnly.value ? roomStudents.value.filter(rowRisk) : roomStudents.value,
 );
-const roomRiskCount = computed(() => (grade.value && room.value ? roomRisk(grade.value, room.value) : 0));
+
+function sessionCount(term: Term, round: Round): number {
+  return roomStudents.value.filter(
+    (s) => data.findDuplicate(s.id, data.period.year, term, round) !== null,
+  ).length;
+}
+const sessionCounts = computed(() =>
+  new Map(SESSIONS.map((s) => [s.term + s.round, sessionCount(s.term, s.round)] as const)),
+);
+function applyDefaultRound() {
+  const pick = defaultRound((s) =>
+    roomStudents.value.some(
+      (st) => data.findDuplicate(st.id, data.period.year, s.term, s.round) !== null,
+    ),
+  );
+  sessTerm.value = pick.term;
+  sessRound.value = pick.round;
+}
 
 // ---- room actions ----
-const importOpen = ref(false);
-function onImported(r: { added: number; updated: number }) {
-  say(`นำเข้า Excel แล้ว · เพิ่ม ${r.added} · อัปเดต ${r.updated}`);
-}
 function exportRoom() {
   const list = roomStudents.value;
   downloadBlob(
@@ -124,16 +169,15 @@ watch(view, syncHeader);
     <section v-if="searching" class="panel" aria-label="ผลการค้นหา">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ชั้น/ห้อง</th><th>ภาวะล่าสุด</th></tr></thead>
+          <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ชั้น/ห้อง</th></tr></thead>
           <tbody>
             <tr v-for="s in results" :key="s.id" @click="openRoom(s.grade, s.room)">
               <td>{{ s.id }}</td>
               <td class="nm">{{ s.firstName }} {{ s.lastName }}</td>
               <td>{{ s.grade }}/{{ s.room }}</td>
-              <td><span class="pill" :class="statusOf(s).cls">{{ statusOf(s).label }}</span></td>
             </tr>
             <tr v-if="!results.length">
-              <td colspan="4" class="empty-cell">ไม่พบนักเรียนที่ตรงกับ “{{ search.trim() }}”</td>
+              <td colspan="3" class="empty-cell">ไม่พบนักเรียนที่ตรงกับ "{{ search.trim() }}"</td>
             </tr>
           </tbody>
         </table>
@@ -165,13 +209,6 @@ watch(view, syncHeader);
             >
               <span class="rc-name">{{ g.grade }}/{{ r }}</span>
               <span class="rc-count">{{ data.roomInfo(g.grade, r).total }} คน</span>
-              <span class="rc-tags">
-                <span
-                  class="pill"
-                  :class="progressClass(data.roomInfo(g.grade, r).measured, data.roomInfo(g.grade, r).total)"
-                >{{ progressText(data.roomInfo(g.grade, r).measured, data.roomInfo(g.grade, r).total) }}</span>
-                <span v-if="roomRisk(g.grade, r)" class="pill warn risk">⚠️ {{ roomRisk(g.grade, r) }} เสี่ยง</span>
-              </span>
             </button>
           </div>
         </section>
@@ -181,13 +218,6 @@ watch(view, syncHeader);
     <!-- STUDENTS: roster of the chosen room (in-place swap) -->
     <template v-else>
       <div class="room-actions">
-        <button class="act-card" @click="importOpen = true">
-          <span class="act-ico" aria-hidden="true">📥</span>
-          <span class="act-body">
-            <span class="act-title">นำเข้ารายชื่อนักเรียน</span>
-            <span class="act-desc">นำเข้ารายชื่อนักเรียนของห้องนี้จากไฟล์ Excel</span>
-          </span>
-        </button>
         <button class="act-card" :disabled="!roomStudents.length" @click="exportRoom">
           <span class="act-ico" aria-hidden="true">📤</span>
           <span class="act-body">
@@ -197,9 +227,30 @@ watch(view, syncHeader);
         </button>
       </div>
 
+      <div class="round-picker">
+        <span class="round-label">เลือกรอบการวัด</span>
+        <div class="round-tabs session-tabs" role="tablist" aria-label="รอบการวัด">
+          <button
+            v-for="s in SESSIONS"
+            :key="s.term + s.round"
+            class="round-tab"
+            :class="{ on: isActiveSession(s.term, s.round) }"
+            role="tab"
+            :aria-selected="isActiveSession(s.term, s.round)"
+            @click="pickSession(s.term, s.round)"
+          >
+            {{ s.label }}
+            <span class="rt-count" :class="sessionCounts.get(s.term + s.round)! === roomStudents.length && roomStudents.length > 0 ? 'good' : sessionCounts.get(s.term + s.round)! === 0 ? 'neutral' : 'warn'">{{ sessionCounts.get(s.term + s.round)! }}/{{ roomStudents.length }}</span>
+          </button>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="toolbar">
-          <div class="section-title" style="margin: 0">ห้อง {{ grade }}/{{ room }}</div>
+          <p class="round-summary">
+            ภาคเรียนที่ {{ sessTerm }} ครั้งที่ {{ sessRound }} ·
+            บันทึกแล้ว <strong>{{ sessionCounts.get(sessTerm + sessRound) ?? 0 }}</strong>/{{ roomStudents.length }} คน
+          </p>
           <span class="spacer"></span>
           <button
             v-if="roomRiskCount"
@@ -211,18 +262,38 @@ watch(view, syncHeader);
             ⚠️ เฉพาะกลุ่มเสี่ยง <span class="chip-n">{{ roomRiskCount }}</span>
           </button>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>เพศ</th><th>ภาวะล่าสุด</th></tr></thead>
+        <div class="table-wrap ws-scroll">
+          <table class="ws-table">
+            <thead>
+              <tr>
+                <th>รหัส</th><th>ชื่อ-สกุล</th><th>เพศ</th>
+                <th class="num">น้ำหนัก</th><th class="num">ส่วนสูง</th>
+                <th class="ctr">น้ำหนัก/อายุ</th><th class="ctr">ส่วนสูง/อายุ</th><th class="ctr">น้ำหนัก/ส่วนสูง</th><th class="ctr">สูงดีสมส่วน</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr v-for="s in currentRoomStudents" :key="s.id">
-                <td>{{ s.id }}</td>
+              <tr v-for="s in currentRoomStudents" :key="s.id" tabindex="0" @click="$emit('go', 'students', { focus: s.id })" @keydown.enter="$emit('go', 'students', { focus: s.id })">
+                <td class="id">{{ s.id }}</td>
                 <td class="nm">{{ s.firstName }} {{ s.lastName }}</td>
                 <td>{{ s.gender }}</td>
-                <td><span class="pill" :class="statusOf(s).cls">{{ statusOf(s).label }}</span></td>
+                <template v-if="assessMap.get(s.id)!.measure">
+                  <td class="num">{{ assessMap.get(s.id)!.measure!.weightKg }} <span class="unit">กก.</span></td>
+                  <td class="num">{{ assessMap.get(s.id)!.measure!.heightCm }} <span class="unit">ซม.</span></td>
+                  <template v-if="assessMap.get(s.id)!.result">
+                    <td class="ctr"><span class="pill" :class="wfaClass[assessMap.get(s.id)!.result!.wfa]">{{ shortWfa(assessMap.get(s.id)!.result!.wfa) }}</span></td>
+                    <td class="ctr"><span class="pill" :class="hfaClass[assessMap.get(s.id)!.result!.hfa]">{{ shortHfa(assessMap.get(s.id)!.result!.hfa) }}</span></td>
+                    <td class="ctr"><span class="pill" :class="wfhClass[assessMap.get(s.id)!.result!.wfh]">{{ assessMap.get(s.id)!.result!.wfh }}</span></td>
+                    <td class="ctr"><span class="pill" :class="assessMap.get(s.id)!.result!.tall ? 'good' : 'warn'">{{ assessMap.get(s.id)!.result!.tall ? 'สูงดีสมส่วน' : 'ไม่สมส่วน' }}</span></td>
+                  </template>
+                  <td v-else class="ctr unmeasured" colspan="4"><span class="pill neutral">ประเมินไม่ได้</span></td>
+                </template>
+                <template v-else>
+                  <td class="num c-dash">—</td><td class="num c-dash">—</td>
+                  <td class="ctr unmeasured" colspan="4"><span class="pill neutral">ยังไม่วัด</span></td>
+                </template>
               </tr>
               <tr v-if="!currentRoomStudents.length">
-                <td colspan="4" class="empty-cell">
+                <td colspan="9" class="empty-cell">
                   {{ riskOnly ? 'ไม่มีนักเรียนกลุ่มเสี่ยงในห้องนี้ 🎉' : 'ห้องนี้ยังไม่มีรายชื่อนักเรียน' }}
                 </td>
               </tr>
@@ -231,15 +302,6 @@ watch(view, syncHeader);
         </div>
       </div>
     </template>
-
-    <ImportDialog
-      :open="importOpen"
-      kind="student"
-      :grade="grade"
-      :room="room"
-      @close="importOpen = false"
-      @imported="onImported"
-    />
 
     <Transition name="toast">
       <div v-if="toast" class="toast" role="status">{{ toast }}</div>
@@ -305,10 +367,53 @@ watch(view, syncHeader);
 .chip-n { background: var(--warn); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 12px; }
 .chipbtn:not(.on) .chip-n { background: var(--line); color: var(--ink-muted); }
 
-/* ---- table rows ---- */
-tbody tr { cursor: pointer; }
+/* ---- round picker (measurement session selector) ---- */
+.round-picker { display: flex; flex-direction: column; gap: 8px; margin-bottom: var(--s4); }
+.round-label { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.round-tabs { display: inline-flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 12px; flex-wrap: wrap; align-self: flex-start; }
+.session-tabs { flex-wrap: wrap; }
+.round-tab {
+  display: inline-flex; align-items: center; gap: 8px; border: none; background: transparent;
+  border-radius: 9px; cursor: pointer; padding: 8px 14px; font-size: 14.5px; font-weight: 700;
+  color: var(--ink-muted); transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.round-tab:hover:not(.on) { color: var(--ink); }
+.round-tab.on { background: var(--surface); color: var(--brand-ink); box-shadow: 0 1px 3px rgba(20,30,35,0.12); }
+.round-tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.rt-count { font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; }
+.rt-count.good { background: var(--good-tint); color: var(--good); }
+.rt-count.warn { background: var(--warn-tint); color: var(--warn); }
+.rt-count.neutral { background: var(--surface); color: var(--ink-muted); box-shadow: inset 0 0 0 1px var(--line); }
+.round-tab.on .rt-count.neutral { background: var(--brand-tint); box-shadow: none; }
+
+/* ---- round summary (replaces the redundant room title) ---- */
+.round-summary { margin: 0; font-size: 14.5px; color: var(--ink-muted); }
+.round-summary strong { color: var(--ink); font-weight: 800; }
+
+/* ---- wide table ---- */
+.ws-scroll { overflow-x: auto; }
+.ws-table { min-width: 880px; }
+.ws-table thead th { background: var(--surface-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ws-table th.num, .ws-table td.num { text-align: right; white-space: nowrap; }
+.ws-table th.ctr, .ws-table td.ctr { text-align: center; }
+.ws-table .pill { white-space: normal; }
+.ws-table td.id { font-variant-numeric: tabular-nums; color: var(--ink-muted); font-weight: 600; }
+.ws-table td.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ws-table .unit { color: var(--ink-muted); font-weight: 500; font-size: 13px; }
+.ws-table td.c-dash { color: var(--ink-muted); }
+.ws-table td.unmeasured { text-align: center; }
+.ws-table td.unmeasured .pill { opacity: 0.85; }
+
+/* ---- table rows: clickable affordance ---- */
+.ws-table tbody tr { cursor: pointer; transition: background 120ms var(--ease); }
+.ws-table tbody tr:hover { background: var(--brand-tint); }
+.ws-table tbody tr:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .nm { font-weight: 600; }
 .empty-cell { text-align: center; color: var(--ink-muted); padding: var(--s5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-table tbody tr, .round-tab { transition: none; }
+}
 
 /* ---- empty state ---- */
 .blank { text-align: center; padding: var(--s6) var(--s4); color: var(--ink-muted); }

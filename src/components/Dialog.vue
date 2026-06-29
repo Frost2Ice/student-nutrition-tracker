@@ -51,8 +51,7 @@ onBeforeUnmount(() => {
   border: none;
   padding: 0;
   background: transparent;
-  max-width: min(920px, 94vw);
-  width: 100%;
+  width: min(920px, 94vw);
   max-height: 92vh;
   color: var(--ink);
 }
@@ -98,7 +97,7 @@ onBeforeUnmount(() => {
   .dlg[open], .dlg[open]::backdrop { animation: none; }
 }
 @media (max-width: 560px) {
-  .dlg { max-width: 100vw; max-height: 100vh; }
+  .dlg { width: 100vw; max-height: 100vh; }
   .dlg-panel { border-radius: 0; max-height: 100vh; }
 }
 </style>
