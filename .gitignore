@@ -3,3 +3,9 @@ dist/
 .playwright-mcp/
 *.log
 .DS_Store
+# Added by code-review-graph
+.code-review-graph/
+
+# AI Tools
+.claude/
+.kiro/
