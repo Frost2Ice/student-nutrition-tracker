@@ -58,7 +58,7 @@ describe('useRoute', () => {
   it('reacts to a manual hash change (Back/Forward)', () => {
     const r = useRoute();
     r.start();
-    setHash('#/data');
+    setHash('#/wizard');
     expect(r.current).toBe('wizard');
   });
 });
