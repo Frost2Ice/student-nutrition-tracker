@@ -17,7 +17,7 @@ import ImportDialog from '../components/ImportDialog.vue';
 import { useHeader } from '../stores/header';
 
 const props = defineProps<{ focusId?: string | null; returnRoom?: { grade: string; room: string } | null }>();
-const emit = defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }]; focused: [] }>();
+const emit = defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }] }>();
 
 // True when this view was opened as a profile deep-link from the Student
 // Workspace. Back from the profile then returns to the Workspace, not the
@@ -107,7 +107,6 @@ watch(
       open.value = s;
       deepLinked.value = true;
     }
-    emit('focused');
   },
   { immediate: true },
 );
@@ -327,6 +326,10 @@ function confirmDelStudent() {
   delStudent.value = false;
   open.value = null;
   say('ลบนักเรียนแล้ว');
+  // When opened as a profile deep-link (#/students/student/<id>), the student
+  // is now gone — navigate back to the class list so the hash doesn't keep the
+  // deleted id (the route is the source of truth post-refactor).
+  if (deepLinked.value) emit('go', 'students-poc', props.returnRoom ?? undefined);
 }
 
 // ---- measurement form ----
