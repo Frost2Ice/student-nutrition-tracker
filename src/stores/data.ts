@@ -5,6 +5,7 @@ import { ReadonlyYearError } from '../domain/types';
 import { calcNutrition } from '../domain/nutrition/engine';
 import { latestPerStudent } from '../domain/nutrition/latest';
 import { GRADE_ORDER } from '../domain/grade/ladder';
+import { classSlug } from '../domain/school/class-slug';
 import { splitSetup } from '../domain/school/migrate';
 import { useSchool } from './school';
 
@@ -334,6 +335,21 @@ export const useData = defineStore('data', () => {
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 
+  /**
+   * Resolve a route class slug back to its `(grade, room)` by matching against
+   * the current year's known classes. The slug is a routing-boundary concern;
+   * the domain keeps `(grade, room)`. Returns null if the slug doesn't match a
+   * class in the viewed year (caller falls back gracefully).
+   */
+  function findClassBySlug(slug: string): { grade: string; room: string } | null {
+    for (const { grade, rooms } of structure.value) {
+      for (const room of rooms) {
+        if (classSlug(grade, room) === slug) return { grade, room };
+      }
+    }
+    return null;
+  }
+
   function searchStudents(q: string): Student[] {
     const trimmed = q.trim();
     if (!trimmed) return [];
@@ -377,6 +393,7 @@ export const useData = defineStore('data', () => {
     roomInfo,
     gradeInfo,
     roomStudents,
+    findClassBySlug,
     searchStudents,
   };
 });

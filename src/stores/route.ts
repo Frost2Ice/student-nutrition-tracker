@@ -1,13 +1,17 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { parseHash, destToHash, type Dest } from '../router/hashRoutes';
+import { parseRoute, destToHash, type Dest, type RouteParams } from '../router/hashRoutes';
 
 export const useRoute = defineStore('route', () => {
-  const current = ref<Dest>(parseHash(window.location.hash));
+  const initial = parseRoute(window.location.hash);
+  const current = ref<Dest>(initial.dest);
+  const params = ref<RouteParams>(initial.params);
   let started = false;
 
   function sync() {
-    current.value = parseHash(window.location.hash);
+    const r = parseRoute(window.location.hash);
+    current.value = r.dest;
+    params.value = r.params;
   }
 
   function start() {
@@ -18,13 +22,13 @@ export const useRoute = defineStore('route', () => {
     sync();
   }
 
-  // Single writer: set the hash; the hashchange listener updates `current`.
+  // Single writer: set the hash; the hashchange listener updates state.
   // If the hash is already correct no event fires, so settle state directly.
-  function navigate(dest: Dest) {
-    const next = destToHash(dest);
+  function navigate(dest: Dest, p?: RouteParams) {
+    const next = destToHash(dest, p);
     if (window.location.hash === next) { sync(); return; }
     window.location.hash = next;
   }
 
-  return { current, start, navigate };
+  return { current, params, start, navigate };
 });

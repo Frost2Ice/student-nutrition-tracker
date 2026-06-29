@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHash, destToHash, type Dest } from '../../src/router/hashRoutes';
+import { parseHash, destToHash, parseRoute, type Dest } from '../../src/router/hashRoutes';
 
 describe('parseHash', () => {
   it('maps empty / root forms to home', () => {
@@ -53,5 +53,48 @@ describe('destToHash', () => {
       'wizard-students', 'wizard-measures', 'wizard-export', 'wizard-backup',
     ];
     for (const d of live) expect(parseHash(destToHash(d))).toBe(d);
+  });
+});
+
+describe('parseRoute — student params', () => {
+  it('parses the class drill-down route as an opaque slug', () => {
+    expect(parseRoute('#/students/class/' + encodeURIComponent('อ-2-1')))
+      .toEqual({ dest: 'students-poc', params: { classSlug: 'อ-2-1' } });
+  });
+  it('parses the student detail route', () => {
+    expect(parseRoute('#/students/student/s-42'))
+      .toEqual({ dest: 'students-poc', params: { studentId: 's-42' } });
+  });
+  it('returns empty params for static routes', () => {
+    expect(parseRoute('#/reports')).toEqual({ dest: 'reports', params: {} });
+    expect(parseRoute('#/students')).toEqual({ dest: 'students-poc', params: {} });
+  });
+  it('falls back to home with empty params for unknown', () => {
+    expect(parseRoute('#/nope')).toEqual({ dest: 'home', params: {} });
+  });
+});
+
+describe('destToHash — student params', () => {
+  it('builds the class route from the slug', () => {
+    expect(destToHash('students-poc', { classSlug: 'อ-2-1' }))
+      .toBe('#/students/class/' + encodeURIComponent('อ-2-1'));
+  });
+  it('builds the student route', () => {
+    expect(destToHash('students-poc', { studentId: 's-42' }))
+      .toBe('#/students/student/' + encodeURIComponent('s-42'));
+  });
+  it('ignores empty params (plain students route)', () => {
+    expect(destToHash('students-poc', {})).toBe('#/students');
+    expect(destToHash('students-poc')).toBe('#/students');
+  });
+  it('round-trips the param routes', () => {
+    const cases: { classSlug?: string; studentId?: string }[] = [
+      { classSlug: 'อ-2-1' },
+      { studentId: 's-42' },
+    ];
+    for (const p of cases) {
+      const rt = parseRoute(destToHash('students-poc', p));
+      expect(rt).toEqual({ dest: 'students-poc', params: p });
+    }
   });
 });

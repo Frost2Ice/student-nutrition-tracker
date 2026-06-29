@@ -61,4 +61,29 @@ describe('useRoute', () => {
     setHash('#/wizard');
     expect(r.current).toBe('wizard');
   });
+
+  it('exposes params parsed from the hash', () => {
+    hash = '#/students/student/s-7';
+    const r = useRoute();
+    expect(r.current).toBe('students-poc');
+    expect(r.params).toEqual({ studentId: 's-7' });
+  });
+
+  it('navigate() with params writes the param hash and updates state', () => {
+    const r = useRoute();
+    r.start();
+    r.navigate('students-poc', { classSlug: 'อ-2-1' });
+    expect(window.location.hash).toBe('#/students/class/' + encodeURIComponent('อ-2-1'));
+    expect(r.current).toBe('students-poc');
+    expect(r.params).toEqual({ classSlug: 'อ-2-1' });
+  });
+
+  it('navigate() with no params clears prior params', () => {
+    const r = useRoute();
+    r.start();
+    r.navigate('students-poc', { studentId: 's-7' });
+    r.navigate('students-poc');
+    expect(window.location.hash).toBe('#/students');
+    expect(r.params).toEqual({});
+  });
 });
