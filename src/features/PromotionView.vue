@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import Stepper from '../components/Stepper.vue';
 import { useData } from '../stores/data';
 import { serializeBackup } from '../domain/transfer/backup';
 import { aoaToXlsxBlob, graduatesToAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
-import { planPromotion, applyPromotion } from '../domain/promotion/promote';
+import { planPromotion } from '../domain/promotion/promote';
 import { promote as promoteGrade } from '../domain/grade/ladder';
+import { buildNextYear, type RolloverDecision } from '../domain/year/rollover';
 import type { Decision } from '../domain/promotion/promote';
+import { useSchool } from '../stores/school';
 
 const emit = defineEmits<{ done: []; exit: [] }>();
 
 const data = useData();
+const school = useSchool();
+
+// Rolling the year over always operates on the active (editable) year, even if the
+// teacher launched this while viewing an archived one.
+onMounted(() => data.viewActive());
 
 const steps = ['เริ่มต้น', 'สำรองข้อมูล', 'ตรวจสอบ', 'ผู้จบการศึกษา', 'ยืนยัน', 'เสร็จสิ้น'];
 const i = ref(0);
@@ -154,18 +161,25 @@ function downloadGraduates() {
 }
 
 function confirm() {
-  // Build final decisions: for max-grade students with no explicit decision, graduate them
-  const finalDecisions: Record<string, Decision> = { ...decisions.value };
+  // Build final decisions: for max-grade students with no explicit decision, graduate them.
+  const finalDecisions: Record<string, RolloverDecision> = { ...decisions.value };
   for (const s of plan.value.graduate) {
     if (!finalDecisions[s.id]) {
       finalDecisions[s.id] = { action: 'graduate' };
     }
   }
-  applyPromotion(
-    { students: data.students, updateStudent: data.updateStudent, deleteStudent: data.deleteStudent },
-    finalDecisions,
-  );
-  data.setPeriod({ year: toYear.value });
+  // Non-destructive: the current year is frozen as-is and a NEW year snapshot is
+  // created with promoted students. Graduates are simply not carried forward.
+  const prev = school.activeYear ? school.loadYear(school.activeYear) : null;
+  if (!prev) return;
+  const next = buildNextYear(prev, finalDecisions, {
+    year: toYear.value,
+    teacher: data.setup.teacher,
+    maxGrade: data.setup.maxGrade,
+    classrooms: data.classrooms,
+  });
+  school.createYear(next); // archives the prior active year, opens the new one
+  data.viewActive();
   i.value = 5;
 }
 </script>
