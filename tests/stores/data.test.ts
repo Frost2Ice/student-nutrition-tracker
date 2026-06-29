@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useData } from '../../src/stores/data';
+import { useSchool } from '../../src/stores/school';
+import type { YearSnapshot } from '../../src/domain/types';
 
 // Minimal localStorage mock for node test environment
 const store: Record<string, string> = {};
@@ -45,9 +47,10 @@ describe('useData store', () => {
     store.setPeriod({ year: '2567' });
     expect(store.period).toEqual({ year: '2567' });
 
-    // persisted to localStorage
-    const stored = JSON.parse(localStorage.getItem('ntr2_period') ?? '{}');
-    expect(stored).toEqual({ year: '2567' });
+    // setPeriod renames the active year; the snapshot is now stored under the new year key
+    const snap = JSON.parse(localStorage.getItem('ntr2_v2_year_2567') ?? 'null');
+    expect(snap?.year).toBe('2567');
+    expect(localStorage.getItem('ntr2_v2_year_')).toBeNull(); // old empty-year key removed
   });
 
   it('structure, roomInfo, gradeInfo, roomStudents, searchStudents work correctly', () => {
@@ -171,6 +174,24 @@ describe('useData store', () => {
     expect(d.measures.find((m) => m.studentId === '1')?.weightKg).toBe(25);
     expect(d.upsertMeasure({ ...base, round: '2', weightKg: 30 })).toBe('added');
     expect(d.measures.filter((m) => m.studentId === '1')).toHaveLength(2);
+  });
+
+  it('isReadonly true when viewing an archived year, and mutations throw', () => {
+    const mk = (year: string): YearSnapshot => ({ year, createdAt: 1, teacher: 'ค', maxGrade: 'ป.6', classrooms: [], students: [], measures: [] });
+    const school = useSchool();
+    school.createYear(mk('2568'));
+    school.createYear(mk('2569')); // 2569 active, 2568 archived
+    const data = useData();
+    data.viewYear('2568');
+    expect(data.isReadonly).toBe(true);
+    expect(() => data.addStudent({ id: 'x', firstName: 'ก', lastName: 'ข', dob: '1/1/2560', gender: 'ชาย', grade: 'ป.1', room: '1' })).toThrow('เก็บถาวร');
+  });
+
+  it('writes land in the active year snapshot', () => {
+    const data = useData();
+    data.setPeriod({ year: '2570' });
+    data.addStudent({ id: 'a', firstName: 'ก', lastName: 'ข', dob: '1/1/2560', gender: 'ชาย', grade: 'ป.1', room: '1' });
+    expect(useSchool().loadYear('2570')!.students).toHaveLength(1);
   });
 
   it('replaceAll replaces all four refs and persists', () => {

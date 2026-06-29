@@ -24,10 +24,12 @@ describe('period year-only + measureSession', () => {
     expect(data.period).toEqual({ year: '2568' });
   });
 
-  it('setPeriod persists year only', () => {
+  it('setPeriod renames the active year snapshot (year only)', () => {
     const data = useData();
     data.setPeriod({ year: '2569' });
-    expect(JSON.parse(localStorage.getItem('ntr2_period')!)).toEqual({ year: '2569' });
+    expect(data.period).toEqual({ year: '2569' });
+    const snap = JSON.parse(localStorage.getItem('ntr2_v2_year_2569')!);
+    expect(snap.year).toBe('2569');
   });
 
   it('measureSession starts null and is settable', () => {
