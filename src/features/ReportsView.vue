@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
+import { useSchool } from '../stores/school';
 import { useHeader } from '../stores/header';
 import { summarize, summaryToAoa, WFH_BUCKET_LABELS } from '../domain/report/summary';
 import { printElement } from './print';
@@ -9,21 +10,28 @@ import { downloadBlob } from './download';
 import type { Term } from '../domain/types';
 
 const data = useData();
+const school = useSchool();
 const header = useHeader();
 onMounted(() => header.setHeader({ title: 'รายงาน', back: null, context: 'year' }));
 
-// Filter: year + term; default to current period
-const year = ref(data.period.year || '2568');
+// Report can view ANY academic year read-only; default to the active year.
+const selectedYear = ref(school.activeYear ?? data.period.year ?? '2568');
 const term = ref<Term>('1');
 
-// Dynamic year options: current period year ± 1
-const yearOptions = computed(() => {
-  const base = Number(data.period.year) || 2568;
-  return [String(base + 1), String(base), String(base - 1)];
+// Year picker options: every year recorded in the school manifest.
+const yearOptions = computed(() => school.listYears().map((m) => m.year));
+
+// Source students+measures from the selected year's snapshot. When the snapshot
+// is missing (e.g. the active year hasn't been persisted yet) fall back to the
+// live data store so the active-year path matches today's behavior.
+const yearData = computed(() => {
+  const snap = school.snapshotForYear(selectedYear.value);
+  if (snap) return { students: snap.students, measures: snap.measures };
+  return { students: data.students, measures: data.measures };
 });
 
 const summary = computed(() =>
-  summarize(data.students, data.measures, year.value, term.value),
+  summarize(yearData.value.students, yearData.value.measures, selectedYear.value, term.value),
 );
 
 const WFH_CATEGORIES = WFH_BUCKET_LABELS.map((label, i) => ({
@@ -62,10 +70,10 @@ function handlePrint() {
 
 function handleXlsx() {
   const blob = aoaToXlsxBlob(
-    summaryToAoa(data.setup, summary.value, year.value, term.value),
+    summaryToAoa(data.setup, summary.value, selectedYear.value, term.value),
     'สรุปโภชนาการ',
   );
-  downloadBlob(blob, `รายงานสรุป ${year.value} ภาค${term.value}.xlsx`);
+  downloadBlob(blob, `รายงานสรุป ${selectedYear.value} ภาค${term.value}.xlsx`);
 }
 </script>
 
@@ -77,7 +85,7 @@ function handleXlsx() {
     <div class="filterbar">
       <div class="field">
         <label>ปีการศึกษา</label>
-        <select v-model="year"><option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option></select>
+        <select v-model="selectedYear"><option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option></select>
       </div>
       <div class="field">
         <label>ภาคเรียน</label>
@@ -96,7 +104,7 @@ function handleXlsx() {
           <div class="doc-school">{{ data.setup.school }} · จังหวัด{{ data.setup.province }}</div>
         </div>
         <div class="doc-period">
-          <div>ปีการศึกษา {{ year }} · ภาคเรียน {{ term }}</div>
+          <div>ปีการศึกษา {{ selectedYear }} · ภาคเรียน {{ term }}</div>
           <div class="muted">วันที่ออกรายงาน {{ today }}</div>
         </div>
       </div>
