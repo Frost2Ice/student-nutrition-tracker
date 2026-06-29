@@ -17,6 +17,11 @@ bundled to one self-contained `dist/index.html` (no network at runtime).
 - Specs/plans live in `docs/superpowers/`; product/visual docs: `PRODUCT.md`, `DESIGN.md`.
 
 ## Gotchas
+- **Student Workspace migration (2026-06-29):** `StudentsPocView.vue` (nav: นักเรียน)
+  is the live student+measurement surface. Legacy `StudentsView.vue` + `MeasureView.vue`
+  are hidden from nav but still routed/mounted (StudentsView renders the student
+  profile via a `focus` deep-link from the Workspace). They're an intentional safety
+  net — not dead code — until a dedicated cleanup phase removes them.
 - `tsconfig` has `noUnusedLocals` — unused imports fail the build.
 - Chart.js: set `animation: false` (headless/screenshots capture mid-animation = blank charts).
 - Thai Buddhist-era dates `D/M/YYYY`; academic year (ปีการศึกษา) ≠ calendar year

@@ -162,6 +162,19 @@ Color strategy is **Restrained**: cool-tinted neutrals + one teal accent for pri
 actions and current state; nutrition status uses a small good/warn/bad vocabulary,
 always paired with a Thai label (never color alone).
 
+Navigation (during the Student Workspace migration, 2026-06-29): หน้าหลัก ·
+**นักเรียน** (Student Workspace — the single surface for both browsing/managing
+students and recording measurements) · รายงาน · ตั้งค่า · ผู้ช่วยจัดการข้อมูล. The
+legacy standalone **นักเรียน** and **บันทึกการวัด** entries are hidden from the
+sidebar/bottom-nav; their views and routes stay in the codebase as a safety net
+until the Workspace is verified, then get a dedicated cleanup pass. The Workspace
+owns its own Back hierarchy (map → room roster → student profile); opening a
+profile carries the room so Back returns there, never into the legacy browse.
+Pages are addressable by hash (`#/`, `#/students`, `#/reports`, `#/settings`,
+`#/data`); navigation updates `location.hash` and rendering follows it, so
+browser Back/Forward and refresh work and the app still runs from `file://`
+(no History API, no server).
+
 Anti-references: SIS dashboards, spreadsheet-as-UI, government-portal density,
 hero-metric stat templates, anything that makes the teacher feel they might break or
 lose data.
