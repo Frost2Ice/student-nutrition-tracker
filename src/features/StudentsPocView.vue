@@ -3,22 +3,21 @@ defineOptions({ name: 'StudentsPocView' });
 import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from '../stores/data';
 import { useHeader } from '../stores/header';
+import { useRoute } from '../stores/route';
 import { calcNutrition } from '../domain/nutrition/engine';
 import { shortWfa, shortHfa } from '../domain/nutrition/labels';
 import type { Student, Term, Round, Measurement } from '../domain/types';
 import { defaultRound } from '../domain/measure/default-round';
+import { classSlug } from '../domain/school/class-slug';
 import { aoaToXlsxBlob, studentsToAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
-const emit = defineEmits<{ (e: 'go', target: string, payload?: { focus: string; grade: string; room: string }): void; (e: 'reopened'): void }>();
-const props = defineProps<{ reopen?: { grade: string; room: string } | null }>();
-
 const data = useData();
 const header = useHeader();
+const route = useRoute();
 
-// Open a student's full profile (rendered by the legacy StudentsView for now).
-// Carry grade/room so Back from the profile returns to THIS room, not legacy browse.
-function openStudent(id: string, g: string, r: string) {
-  emit('go', 'students', { focus: id, grade: g, room: r });
+// Open a student's full profile via route navigation.
+function openStudent(id: string, _g: string, _r: string) {
+  route.navigate('students-poc', { studentId: id });
 }
 
 // ---- measurement round selector ----
@@ -69,20 +68,22 @@ function rowRisk(s: Student): boolean {
 }
 
 // ---- navigation: map (grades+rooms in one) → students ----
-const view = ref<'map' | 'students'>('map');
-const grade = ref('');
-const room = ref('');
+// Drill-down level is derived from the route: a class slug resolves to a class
+// in the viewed year → room view; otherwise (or if the slug is stale) → map.
+const openClass = computed(() =>
+  route.params.classSlug ? data.findClassBySlug(route.params.classSlug) : null,
+);
+const grade = computed(() => openClass.value?.grade ?? '');
+const room = computed(() => openClass.value?.room ?? '');
+const view = computed<'map' | 'students'>(() => (grade.value && room.value ? 'students' : 'map'));
 
 function openRoom(g: string, r: string) {
-  grade.value = g;
-  room.value = r;
   riskOnly.value = false;
-  applyDefaultRound();
-  view.value = 'students';
+  route.navigate('students-poc', { classSlug: classSlug(g, r) });
   window.scrollTo({ top: 0 });
 }
 function toMap() {
-  view.value = 'map';
+  route.navigate('students-poc');
   window.scrollTo({ top: 0 });
 }
 
@@ -147,6 +148,11 @@ function say(msg: string) {
   toastT = setTimeout(() => (toast.value = ''), 3000);
 }
 
+// Apply default round reactively when the room changes.
+watch([grade, room], ([g, r]) => {
+  if (g && r) applyDefaultRound();
+}, { immediate: true });
+
 // ---- header ----
 function syncHeader() {
   if (view.value === 'students') {
@@ -157,17 +163,6 @@ function syncHeader() {
 }
 onMounted(syncHeader);
 watch(view, syncHeader);
-
-// Returning from a student profile: reopen the room the user was in.
-watch(
-  () => props.reopen,
-  (r) => {
-    if (!r) return;
-    openRoom(r.grade, r.room);
-    emit('reopened');
-  },
-  { immediate: true },
-);
 </script>
 
 <template>

@@ -6,6 +6,7 @@ import { useHeader } from './stores/header';
 import { useRoute } from './stores/route';
 import type { Dest } from './router/hashRoutes';
 import { parseBackup } from './domain/transfer/backup';
+import { classSlug } from './domain/school/class-slug';
 import OnboardingView from './features/OnboardingView.vue';
 import HomeView from './features/HomeView.vue';
 import StudentsView from './features/StudentsView.vue';
@@ -31,17 +32,29 @@ const route = useRoute();
 const welcome = ref<'choose' | 'restore'>('choose');
 const restoreError = ref('');
 const restoreInput = ref<HTMLInputElement | null>(null);
-// Whether the #/students route shows the legacy student profile (StudentsView)
-// instead of the Workspace (StudentsPocView). In-page state, not its own route.
-const showProfile = ref(false);
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
-const focusStudent = ref<string | null>(null);
-// Room the user was viewing in the Student Workspace when they opened a
-// profile — lets the profile's Back return there, and the Workspace reopen it.
-const studentReturn = ref<{ grade: string; room: string } | null>(null);
-const pocReopen = ref<{ grade: string; room: string } | null>(null);
 const wizardStart = ref<string | null>(null);
+
+// Student detail is route-driven: #/students/student/<id>. Resolve the id against
+// the current year; if it's gone (promoted away / wrong year) fall back gracefully.
+const focusStudent = computed(() => route.params.studentId ?? null);
+const focusValid = computed(() => !!focusStudent.value && !!data.findStudent(focusStudent.value));
+const showProfile = computed(() => focusValid.value);
+
+watch(() => route.params.studentId, (id) => {
+  if (!id) return;
+  const s = data.findStudent(id);
+  if (!s) {
+    // Unknown student: drop to class root.
+    route.navigate('students-poc');
+  }
+}, { immediate: true });
+
+const studentReturn = computed(() => {
+  const s = focusStudent.value ? data.findStudent(focusStudent.value) : null;
+  return s ? { grade: s.grade, room: s.room } : null;
+});
 
 function pickRestoreFile() {
   restoreInput.value?.click();
@@ -84,11 +97,6 @@ const overlayTitle: Record<string, string> = {
 
 const destLabel = computed(() => nav.find((n) => n.id === route.current)?.label ?? '');
 
-// Leaving the #/students route (or re-entering it via Back/Forward) drops the
-// profile overlay so the Workspace shows. Opening a profile happens while
-// already on #/students, so navigate() is a no-op there and this won't fire.
-watch(() => route.current, () => { showProfile.value = false; });
-
 function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string; grade?: string; room?: string }) {
   if (target === 'import' || target === 'promotion' || target === 'onboarding') {
     if (target === 'import' && payload && 'grade' in payload && payload.grade && payload.room) {
@@ -96,18 +104,16 @@ function go(target: string, payload?: { grade: string; room: string } | { start:
     }
     overlay.value = target as Overlay;
   } else if (target === 'students' && payload && 'focus' in payload) {
-    // Open the legacy student profile as in-page state of #/students.
-    focusStudent.value = payload.focus;
-    studentReturn.value = payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
-    route.navigate('students-poc');
-    showProfile.value = true;
-    header.setHeader({ title: '', back: null, context: 'year' });
+    // Student detail is now its own hash entry.
+    route.navigate('students-poc', { studentId: payload.focus });
   } else {
     if (target === 'wizard') {
       wizardStart.value = payload && 'start' in payload ? payload.start : null;
     }
-    if (target === 'students-poc') {
-      pocReopen.value = payload && 'grade' in payload && payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
+    if (target === 'students-poc' && payload && 'grade' in payload && payload.grade && payload.room) {
+      route.navigate('students-poc', { classSlug: classSlug(payload.grade, payload.room) });
+      window.scrollTo({ top: 0 });
+      return;
     }
     route.navigate(target as Dest);
     // Set the header optimistically so the bar never blanks during the
@@ -191,8 +197,8 @@ const periodLine = computed(() => {
       <main class="content">
         <Transition name="view" mode="out-in">
           <HomeView v-if="route.current === 'home'" key="home" @go="go" />
-          <StudentsView v-else-if="route.current === 'students-poc' && showProfile" key="student-profile" :focus-id="focusStudent" :return-room="studentReturn" @go="go" @focused="focusStudent = null" />
-          <StudentsPocView v-else-if="route.current === 'students-poc'" key="students-poc" :reopen="pocReopen" @go="go" @reopened="pocReopen = null" />
+          <StudentsView v-else-if="route.current === 'students-poc' && showProfile" key="student-profile" :focus-id="focusStudent" :return-room="studentReturn" @go="go" />
+          <StudentsPocView v-else-if="route.current === 'students-poc'" key="students-poc" />
           <MeasureView v-else-if="route.current === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
           <SettingsView v-else-if="route.current === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="route.current === 'reports'" key="reports" />
