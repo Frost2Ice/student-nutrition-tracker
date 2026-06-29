@@ -15,8 +15,13 @@ import { printHtml } from './print';
 import ImportDialog from '../components/ImportDialog.vue';
 import { useHeader } from '../stores/header';
 
-const props = defineProps<{ focusId?: string | null }>();
+const props = defineProps<{ focusId?: string | null; returnRoom?: { grade: string; room: string } | null }>();
 const emit = defineEmits<{ go: [tab: string, payload?: { grade: string; room: string }]; focused: [] }>();
+
+// True when this view was opened as a profile deep-link from the Student
+// Workspace. Back from the profile then returns to the Workspace, not the
+// legacy browse screen.
+const deepLinked = ref(false);
 
 const data = useData();
 const school = useSchool();
@@ -34,7 +39,9 @@ function syncHeader() {
   if (open.value) {
     header.setHeader({
       title: `${open.value.firstName} ${open.value.lastName}`,
-      back: () => { open.value = null; },
+      back: deepLinked.value
+        ? () => emit('go', 'students-poc', props.returnRoom ?? undefined)
+        : () => { open.value = null; },
       context: 'year',
     });
   } else {
@@ -97,6 +104,7 @@ watch(
       room.value = s.room;
       level.value = 'students';
       open.value = s;
+      deepLinked.value = true;
     }
     emit('focused');
   },

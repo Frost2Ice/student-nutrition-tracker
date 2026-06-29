@@ -29,6 +29,10 @@ const dest = ref<Dest>('home');
 const overlay = ref<Overlay>(null);
 const importTarget = ref<{ grade: string; room: string } | null>(null);
 const focusStudent = ref<string | null>(null);
+// Room the user was viewing in the Student Workspace when they opened a
+// profile — lets the profile's Back return there, and the Workspace reopen it.
+const studentReturn = ref<{ grade: string; room: string } | null>(null);
+const pocReopen = ref<{ grade: string; room: string } | null>(null);
 const wizardStart = ref<string | null>(null);
 
 function pickRestoreFile() {
@@ -54,12 +58,14 @@ function onRestoreFile(e: Event) {
 
 const nav: { id: Dest; label: string; ico: string }[] = [
   { id: 'home', label: 'หน้าหลัก', ico: '🏠' },
-  { id: 'students', label: 'นักเรียน', ico: '👥' },
-  { id: 'students-poc', label: 'นักเรียน (POC)', ico: '🧪' },
-  { id: 'measure', label: 'บันทึกการวัด', ico: '📏' },
+  { id: 'students-poc', label: 'นักเรียน', ico: '👥' },
   { id: 'reports', label: 'รายงาน', ico: '📋' },
   { id: 'settings', label: 'ตั้งค่า', ico: '⚙️' },
   { id: 'wizard', label: 'ผู้ช่วยจัดการข้อมูล', ico: '🧭' },
+  // Legacy entries hidden during Student Workspace migration; routes + views kept
+  // as a safety net (still reachable in code, just not in nav):
+  //   { id: 'students', label: 'นักเรียน', ico: '👥' },
+  //   { id: 'measure', label: 'บันทึกการวัด', ico: '📏' },
 ];
 const overlayTitle: Record<string, string> = {
   onboarding: 'เริ่มตั้งค่าระบบ', import: 'นำเข้ารายชื่อนักเรียน', promotion: 'เลื่อนชั้นปีการศึกษา',
@@ -68,10 +74,10 @@ const overlayTitle: Record<string, string> = {
 
 const destLabel = computed(() => nav.find((n) => n.id === dest.value)?.label ?? '');
 
-function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string }) {
+function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string; grade?: string; room?: string }) {
   if (target === 'import' || target === 'promotion' || target === 'onboarding' || target === 'backup') {
-    if (target === 'import' && payload && 'grade' in payload) {
-      importTarget.value = payload;
+    if (target === 'import' && payload && 'grade' in payload && payload.grade && payload.room) {
+      importTarget.value = { grade: payload.grade, room: payload.room };
     }
     overlay.value = target as Overlay;
   } else {
@@ -80,6 +86,10 @@ function go(target: string, payload?: { grade: string; room: string } | { start:
     }
     if (target === 'students' && payload && 'focus' in payload) {
       focusStudent.value = payload.focus;
+      studentReturn.value = payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
+    }
+    if (target === 'students-poc') {
+      pocReopen.value = payload && 'grade' in payload && payload.grade && payload.room ? { grade: payload.grade, room: payload.room } : null;
     }
     dest.value = target as Dest;
     // Set the header optimistically so the bar never blanks during the
@@ -161,8 +171,8 @@ const periodLine = computed(() => {
       <main class="content">
         <Transition name="view" mode="out-in">
           <HomeView v-if="dest === 'home'" key="home" @go="go" />
-          <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" @go="go" @focused="focusStudent = null" />
-          <StudentsPocView v-else-if="dest === 'students-poc'" key="students-poc" @go="go" />
+          <StudentsView v-else-if="dest === 'students'" key="students" :focus-id="focusStudent" :return-room="studentReturn" @go="go" @focused="focusStudent = null" />
+          <StudentsPocView v-else-if="dest === 'students-poc'" key="students-poc" :reopen="pocReopen" @go="go" @reopened="pocReopen = null" />
           <MeasureView v-else-if="dest === 'measure'" key="measure" @done="go('home')" @exit="go('home')" />
           <SettingsView v-else-if="dest === 'settings'" key="settings" @go="go" />
           <ReportsView v-else-if="dest === 'reports'" key="reports" />

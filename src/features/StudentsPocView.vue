@@ -8,10 +8,17 @@ import type { Student, Term, Round, Measurement } from '../domain/types';
 import { defaultRound } from '../domain/measure/default-round';
 import { aoaToXlsxBlob, studentsToAoa } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
-defineEmits<{ (e: 'go', target: string, payload?: { focus: string }): void }>();
+const emit = defineEmits<{ (e: 'go', target: string, payload?: { focus: string; grade: string; room: string }): void; (e: 'reopened'): void }>();
+const props = defineProps<{ reopen?: { grade: string; room: string } | null }>();
 
 const data = useData();
 const header = useHeader();
+
+// Open a student's full profile (rendered by the legacy StudentsView for now).
+// Carry grade/room so Back from the profile returns to THIS room, not legacy browse.
+function openStudent(id: string, g: string, r: string) {
+  emit('go', 'students', { focus: id, grade: g, room: r });
+}
 
 // ---- measurement round selector ----
 const sessTerm = ref<Term>('1');
@@ -149,6 +156,17 @@ function syncHeader() {
 }
 onMounted(syncHeader);
 watch(view, syncHeader);
+
+// Returning from a student profile: reopen the room the user was in.
+watch(
+  () => props.reopen,
+  (r) => {
+    if (!r) return;
+    openRoom(r.grade, r.room);
+    emit('reopened');
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -272,7 +290,7 @@ watch(view, syncHeader);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="s in currentRoomStudents" :key="s.id" tabindex="0" @click="$emit('go', 'students', { focus: s.id })" @keydown.enter="$emit('go', 'students', { focus: s.id })">
+              <tr v-for="s in currentRoomStudents" :key="s.id" tabindex="0" @click="openStudent(s.id, grade, room)" @keydown.enter="openStudent(s.id, grade, room)">
                 <td class="id">{{ s.id }}</td>
                 <td class="nm">{{ s.firstName }} {{ s.lastName }}</td>
                 <td>{{ s.gender }}</td>
