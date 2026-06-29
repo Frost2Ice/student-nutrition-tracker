@@ -9,3 +9,4 @@ dist/
 # AI Tools
 .claude/
 .kiro/
+docs/git-commits/
