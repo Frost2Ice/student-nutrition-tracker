@@ -248,8 +248,17 @@ const hfaClass: Record<string, string> = {
 
 <template>
   <div class="proto-screen proto-wide" :class="{ 'proto-xwide': view === 'table' }">
+    <!-- archived year: recording is disabled -->
+    <div v-if="data.isReadonly" class="panel">
+      <div class="empty">
+        <span class="ico" aria-hidden="true">🔒</span>
+        <div>ปีการศึกษา {{ data.viewingYear }} เก็บถาวรแล้ว ดูข้อมูลได้ แต่บันทึกการวัดเพิ่มไม่ได้</div>
+        <button class="btn primary" @click="data.viewActive()">กลับไปปีปัจจุบันเพื่อบันทึก</button>
+      </div>
+    </div>
+
     <!-- ===== room list ===== -->
-    <template v-if="view === 'rooms'">
+    <template v-else-if="view === 'rooms'">
       <p class="page-sub">เลือกห้องเพื่อดูและบันทึกผลการวัดของห้องนั้น</p>
 
       <div v-if="!data.students.length" class="panel">

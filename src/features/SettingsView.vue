@@ -1,23 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useData } from '../stores/data';
+import { useSchool } from '../stores/school';
 import { useHeader } from '../stores/header';
-import { serializeBackup, parseBackup } from '../domain/transfer/backup';
+import { downloadBlob } from './download';
 import { gradesUpTo } from '../domain/grade/ladder';
 import type { Setup } from '../domain/types';
 
 const emit = defineEmits<{ go: [tab: string] }>();
 
 const data = useData();
+const school = useSchool();
 const header = useHeader();
 onMounted(() => header.setHeader({ title: 'ตั้งค่า', back: null, context: 'year' }));
 
 // --- reset confirm ---
 const resetConfirm = ref('');
-
-// --- restore confirm ---
-const openConfirm = ref(false);
-const pendingRestore = ref<ReturnType<typeof parseBackup> | null>(null);
 
 // --- toast ---
 const toastMsg = ref('');
@@ -116,60 +114,31 @@ function saveClassrooms() {
   showToast('บันทึกโครงสร้างชั้นเรียนแล้ว');
 }
 
-// --- backup download ---
-function doBackup() {
-  const json = serializeBackup({
-    students: data.students,
-    measures: data.measures,
-    setup: data.setup,
-    period: data.period,
-    classrooms: data.classrooms,
-  });
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const ts = new Date().toISOString().slice(0, 10);
-  a.download = `nutrition-backup-${ts}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  data.markBackup();
-  showToast('บันทึกไฟล์สำรองแล้ว');
+// --- academic-year management (list / export / delete archived) ---
+const yearRows = computed(() =>
+  [...school.listYears()]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((m) => {
+      const snap = school.loadYear(m.year);
+      return {
+        year: m.year,
+        status: m.status,
+        students: snap?.students.length ?? 0,
+        measures: snap?.measures.length ?? 0,
+      };
+    }),
+);
+const yearDeleteConfirm = ref<string | null>(null);
+function exportYearRow(year: string) {
+  downloadBlob(new Blob([school.exportYear(year)], { type: 'application/json' }), `ปีการศึกษา ${year}.json`);
+  showToast(`ส่งออกปีการศึกษา ${year} แล้ว`);
 }
-
-// --- restore file input ---
-const restoreInput = ref<HTMLInputElement | null>(null);
-function pickRestoreFile() {
-  restoreInput.value?.click();
-}
-function onRestoreFile(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const parsed = parseBackup(ev.target?.result as string);
-      pendingRestore.value = parsed;
-      openConfirm.value = true;
-    } catch (err) {
-      showToast((err as Error).message);
-    }
-  };
-  reader.readAsText(file);
-  // reset input so same file can be chosen again
-  (e.target as HTMLInputElement).value = '';
-}
-function confirmRestore() {
-  if (!pendingRestore.value) return;
-  data.replaceAll(pendingRestore.value);
-  openConfirm.value = false;
-  pendingRestore.value = null;
-  showToast('กู้คืนข้อมูลสำเร็จ — กำลังโหลดใหม่');
-  setTimeout(() => location.reload(), 1000);
-}
-function cancelRestore() {
-  openConfirm.value = false;
-  pendingRestore.value = null;
+function askDeleteYear(year: string) { yearDeleteConfirm.value = year; }
+function cancelDeleteYear() { yearDeleteConfirm.value = null; }
+function confirmDeleteYear(year: string) {
+  school.deleteYear(year);
+  yearDeleteConfirm.value = null;
+  showToast(`ลบปีการศึกษา ${year} แล้ว`);
 }
 
 // --- reset all ---
@@ -284,39 +253,55 @@ function doReset() {
 
     <div class="group-head">การสำรองข้อมูล</div>
 
-    <!-- Backup / restore (safety — replace) -->
+    <!-- Backup & Restore — opens the full-screen assistant -->
     <div class="panel">
-      <div class="section-title">การสำรองข้อมูล</div>
+      <div class="section-title">สำรองและกู้คืนข้อมูล</div>
       <p class="grp-sub">เก็บสำเนาข้อมูลไว้กันหาย และเปิดกลับมาใช้เมื่อย้ายเครื่องหรือข้อมูลสูญหาย</p>
-
+      <div class="lastbackup" :class="{ stale: backupDays >= 7 }" style="margin-bottom: var(--s4)">
+        {{ backupDays >= 7 || data.lastBackupAt === 0 ? '⚠️' : '✓' }} {{ backupLabel }}
+      </div>
       <div class="goal">
         <div class="goal-ico">💾</div>
         <div class="goal-body">
-          <div class="goal-t">สำรองข้อมูล</div>
-          <div class="goal-d">บันทึกสำเนาข้อมูลทั้งหมดเป็นไฟล์ไว้กับตัว เผื่อคอมพิวเตอร์เสียหรือข้อมูลหาย</div>
-          <div class="lastbackup" :class="{ stale: backupDays >= 7 }">
-            {{ backupDays >= 7 || data.lastBackupAt === 0 ? '⚠️' : '✓' }} {{ backupLabel }}
-          </div>
+          <div class="goal-t">ผู้ช่วยสำรองและกู้คืนข้อมูล</div>
+          <div class="goal-d">พาทำทีละขั้น เลือกสำรองหรือกู้คืน แล้วดาวน์โหลดหรือเปิดไฟล์ได้เลย</div>
         </div>
-        <button class="btn primary" @click="doBackup">สำรองข้อมูล</button>
+        <button class="btn primary" @click="emit('go', 'backup')">เปิดผู้ช่วยสำรองข้อมูล</button>
       </div>
+    </div>
 
-      <div class="goal">
-        <div class="goal-ico">📂</div>
+    <!-- academic-year management -->
+    <div class="panel">
+      <div class="section-title">จัดการปีการศึกษา</div>
+      <p class="grp-sub">ดูทุกปีการศึกษา ส่งออกเป็นไฟล์ และลบปีที่เก็บถาวรแล้วเมื่อไม่ต้องการ · สร้างปีใหม่ได้ที่ "ขึ้นปีการศึกษาใหม่" ด้านล่าง</p>
+      <div v-if="yearRows.length === 0" style="color: var(--ink-muted)">ยังไม่มีปีการศึกษา</div>
+      <div v-for="row in yearRows" :key="row.year" class="goal">
+        <div class="goal-ico">📅</div>
         <div class="goal-body">
-          <div class="goal-t">เปิดข้อมูลสำรอง</div>
-          <div class="goal-d">นำไฟล์สำรองที่เคยบันทึกไว้กลับมาใช้ เมื่อเปลี่ยนเครื่องใหม่ หรือข้อมูลหาย</div>
-          <div v-if="openConfirm" class="callout bad" style="margin: var(--s3) 0 0">
-            <div class="ct">⚠️ ข้อมูลในเครื่องนี้จะถูกแทนที่ทั้งหมด</div>
-            ควร "สำรองข้อมูล" ของตอนนี้ไว้ก่อน
+          <div class="goal-t">
+            ปีการศึกษา {{ row.year }}
+            <span class="pill" :class="row.status === 'active' ? 'good' : 'neutral'" style="margin-left: 6px; font-size: 12px">
+              {{ row.status === 'active' ? 'กำลังใช้งาน' : 'เก็บถาวร' }}
+            </span>
+          </div>
+          <div class="goal-d">{{ row.students }} นักเรียน · {{ row.measures }} ผลการวัด</div>
+          <div v-if="yearDeleteConfirm === row.year" class="callout bad" style="margin: var(--s3) 0 0">
+            <div class="ct">⚠️ ลบปีการศึกษา {{ row.year }} ({{ row.students }} นักเรียน · {{ row.measures }} ผลการวัด)</div>
+            ควรกด "ส่งออก" เพื่อสำรองข้อมูลก่อนลบ การลบนี้ย้อนกลับไม่ได้หากไม่มีไฟล์สำรอง
             <div style="display: flex; gap: 8px; margin-top: var(--s3)">
-              <button class="btn danger" style="min-height: 38px" @click="confirmRestore">นำมาใช้และแทนที่</button>
-              <button class="btn quiet" style="min-height: 38px" @click="cancelRestore">ยกเลิก</button>
+              <button class="btn danger" style="min-height: 44px" @click="confirmDeleteYear(row.year)">ลบปีนี้</button>
+              <button class="btn quiet" style="min-height: 44px" @click="cancelDeleteYear">ยกเลิก</button>
             </div>
           </div>
         </div>
-        <button v-if="!openConfirm" class="btn" @click="pickRestoreFile">เปิดไฟล์สำรอง</button>
-        <input ref="restoreInput" type="file" accept=".json" style="display:none" @change="onRestoreFile" />
+        <div class="year-actions">
+          <button class="btn" @click="exportYearRow(row.year)">ส่งออก</button>
+          <button
+            v-if="row.status === 'archived' && yearDeleteConfirm !== row.year"
+            class="btn danger"
+            @click="askDeleteYear(row.year)"
+          >ลบ</button>
+        </div>
       </div>
     </div>
 
@@ -355,11 +340,15 @@ function doReset() {
 .goal-ico { font-size: 26px; width: 36px; text-align: center; flex-shrink: 0; }
 .goal-body { flex: 1; min-width: 0; }
 .grp-sub { color: var(--ink-muted); font-size: 14.5px; margin: -8px 0 var(--s3); }
+.br-head { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
 .lastbackup { font-size: 13.5px; font-weight: 600; color: var(--good); margin-top: 6px; }
 .lastbackup.stale { color: var(--warn); }
 .goal-t { font-weight: 700; font-size: 16.5px; }
 .goal-d { color: var(--ink-muted); font-size: 14.5px; margin-top: 2px; }
 .goal > .btn { flex-shrink: 0; }
+.year-actions { display: flex; gap: var(--s2); flex-shrink: 0; }
+.year-actions .btn { min-height: 44px; }
+@media (max-width: 560px) { .year-actions { width: 100%; } .year-actions .btn { flex: 1; } }
 
 /* zone grouping header */
 .group-head {

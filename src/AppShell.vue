@@ -12,11 +12,12 @@ import SettingsView from './features/SettingsView.vue';
 import PromotionView from './features/PromotionView.vue';
 import ReportsView from './features/ReportsView.vue';
 import WizardHubView from './features/wizard/WizardHubView.vue';
+import BackupRestoreWizard from './features/wizard/BackupRestoreWizard.vue';
 import ImportDialog from './components/ImportDialog.vue';
 import AppHeader from './components/AppHeader.vue';
 
 type Dest = 'home' | 'students' | 'students-poc' | 'measure' | 'reports' | 'settings' | 'wizard';
-type Overlay = 'onboarding' | 'import' | 'promotion' | null;
+type Overlay = 'onboarding' | 'import' | 'promotion' | 'backup' | null;
 
 const data = useData();
 const header = useHeader();
@@ -62,12 +63,13 @@ const nav: { id: Dest; label: string; ico: string }[] = [
 ];
 const overlayTitle: Record<string, string> = {
   onboarding: 'เริ่มตั้งค่าระบบ', import: 'นำเข้ารายชื่อนักเรียน', promotion: 'เลื่อนชั้นปีการศึกษา',
+  backup: 'ผู้ช่วยสำรองและกู้คืนข้อมูล',
 };
 
 const destLabel = computed(() => nav.find((n) => n.id === dest.value)?.label ?? '');
 
-function go(target: string, payload?: { grade: string; room: string } | { start: string }) {
-  if (target === 'import' || target === 'promotion' || target === 'onboarding') {
+function go(target: string, payload?: { grade: string; room: string } | { start: string } | { focus: string }) {
+  if (target === 'import' || target === 'promotion' || target === 'onboarding' || target === 'backup') {
     if (target === 'import' && payload && 'grade' in payload) {
       importTarget.value = payload;
     }
@@ -75,6 +77,9 @@ function go(target: string, payload?: { grade: string; room: string } | { start:
   } else {
     if (target === 'wizard') {
       wizardStart.value = payload && 'start' in payload ? payload.start : null;
+    }
+    if (target === 'students' && payload && 'focus' in payload) {
+      focusStudent.value = payload.focus;
     }
     dest.value = target as Dest;
     // Set the header optimistically so the bar never blanks during the
@@ -178,7 +183,7 @@ const periodLine = computed(() => {
   </div>
 
   <!-- FULL-PAGE FOCUSED FLOWS (first-run setup, high-stakes promotion) -->
-  <div v-if="overlay === 'onboarding' || overlay === 'promotion'" class="overlay-wrap">
+  <div v-if="overlay === 'onboarding' || overlay === 'promotion' || overlay === 'backup'" class="overlay-wrap">
     <div class="overlay-bar">
       <div class="brand-logo" style="width: 30px; height: 30px; font-size: 16px">🍎</div>
       <div class="ob-title">{{ overlayTitle[overlay] }}</div>
@@ -192,6 +197,11 @@ const periodLine = computed(() => {
     />
     <PromotionView
       v-else-if="overlay === 'promotion'"
+      @done="closeOverlay"
+      @exit="closeOverlay"
+    />
+    <BackupRestoreWizard
+      v-else-if="overlay === 'backup'"
       @done="closeOverlay"
       @exit="closeOverlay"
     />
