@@ -185,6 +185,9 @@ input, select { font-family: inherit; font-size: 16px; color: var(--ink); }
 .btn.primary:hover { background: var(--brand-strong); border-color: var(--brand-strong); }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--brand-ink); }
 .btn.quiet:hover { background: var(--brand-tint); }
+/* ghost: a quiet secondary/back that yields to the primary action beside it */
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
 .btn.danger { border-color: var(--bad-tint); color: var(--bad); background: var(--surface); }
 .btn.danger:hover { background: var(--bad-tint); }
 .btn.block { width: 100%; }

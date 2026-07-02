@@ -108,9 +108,6 @@
 /* wizard footer */
 .wiz-foot { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s6); }
 .wiz-foot .spacer { flex: 1; }
-/* stacked footer: back (outlined) on top, primary action on the bottom */
-.wiz-foot-stack { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s5); }
-.wiz-foot-stack .btn { width: 100%; }
 
 /* callout boxes */
 .callout { border-radius: var(--r); padding: var(--s4) var(--s5); margin: var(--s4) 0; font-size: 15.5px; }
@@ -408,6 +405,57 @@
 .success-check.j {
   background: var(--accent-tint); color: var(--accent-ink);
 }
+.success-check.lg { width: 84px; height: 84px; font-size: 44px; }
+.success-sub { color: var(--ink-muted); font-size: 15.5px; margin: 0 auto var(--s5); max-width: 44ch; }
+.success-sub b { color: var(--ink); font-weight: 700; }
+
+/* ===================================================================
+   Wizard last step — review + success. Shared by the Add-Students and
+   Add-Measures wizards so the confirm/save/done screens read the same.
+   =================================================================== */
+
+/* unified footer: one prominent primary, a quiet ghost back beneath it.
+   Same shape on every step (and on the success screen) so the action
+   never jumps size or position between steps. */
+.wiz-actions { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s6); }
+.wiz-actions .btn { width: 100%; }
+.wiz-actions .btn.back { min-height: 46px; font-size: 16px; }
+
+/* review header: title + count pill on one line, destination recap beneath */
+.review-head {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-bottom: var(--s2);
+}
+.review-head h2 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; }
+.review-count {
+  font-size: 13.5px; font-weight: 700; color: var(--accent-ink);
+  background: var(--accent-tint); padding: 4px 12px; border-radius: 999px;
+}
+.review-recap { color: var(--ink-muted); font-size: 15px; margin-bottom: var(--s5); }
+.review-recap b { color: var(--ink); font-weight: 700; }
+
+/* framed data preview: contains the parsed rows in their own scroll area
+   with a sticky header and zebra rows, so a long list never crowds the
+   footer and each row stays easy to scan for older eyes. */
+.preview-frame {
+  border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden;
+  background: var(--surface);
+}
+.preview-frame .table-wrap { max-height: 360px; overflow: auto; }
+.preview-frame table { width: 100%; border-collapse: collapse; }
+.preview-frame th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2); color: var(--ink-muted);
+  font-size: 13px; font-weight: 700; text-align: left;
+  padding: 12px var(--s4); border-bottom: 1px solid var(--line);
+}
+.preview-frame td {
+  padding: 13px var(--s4); font-size: 15.5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.preview-frame tbody tr:nth-child(even) { background: color-mix(in oklch, var(--surface-2) 45%, var(--surface)); }
+.preview-frame tbody tr:hover { background: var(--accent-tint); }
+.preview-frame tbody tr:last-child td { border-bottom: none; }
 
 /* AppHeader — sticky top bar replacing old .topbar */
 .app-header {

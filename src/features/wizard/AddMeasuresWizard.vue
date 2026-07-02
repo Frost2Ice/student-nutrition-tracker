@@ -36,8 +36,8 @@ const step = ref(0);
 
 const grade = ref('');
 const room = ref('');
-const term = ref<Term>('1');
-const round = ref<Round>('1');
+const term = ref<Term | ''>('');
+const round = ref<Round | ''>('');
 const year = computed(() => data.period.year);
 
 const rooms = computed(() => data.structure.find((g) => g.grade === grade.value)?.rooms ?? []);
@@ -69,7 +69,7 @@ function process(aoa: string[][]) {
   parsedRows.value = [];
   skipped.value = [];
   const strict = pickMeasureColumns(aoa);
-  const out = parseMeasureAoa(strict, { year: year.value, term: term.value, round: round.value });
+  const out = parseMeasureAoa(strict, { year: year.value, term: term.value as Term, round: round.value as Round });
   parsedRows.value = out.rows;
   skipped.value = out.skipped;
   if (out.rows.length === 0 && out.skipped.length > 0) {
@@ -247,45 +247,55 @@ const canSave = computed(() => parsedRows.value.length > 0 && !result.value);
       ></textarea>
 
       <div v-if="fileErr" class="callout bad" style="margin-top: var(--s4)">{{ fileErr }}</div>
-      <div class="wiz-foot-stack">
-        <button class="btn lg" @click="step = 0">← ย้อนกลับ</button>
+      <div class="wiz-actions">
         <button class="btn j lg" :disabled="!pasteText.trim()" @click="onPaste">ตรวจสอบข้อมูลที่วาง</button>
+        <button class="btn ghost back" @click="step = 0">← ย้อนกลับ</button>
       </div>
     </div>
 
     <!-- step 2: summary -->
     <div v-else>
       <div v-if="!result" class="panel">
-        <div class="section-title">ตรวจสอบ {{ parsedRows.length }} รายการ</div>
-        <p style="color: var(--ink-muted); margin-top: -8px; margin-bottom: var(--s4)">{{ grade }}/{{ room }} · ภาคเรียนที่ {{ term }} · ครั้งที่ {{ round }} · ปี {{ year }}</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>ชื่อ-สกุล</th><th>น้ำหนัก</th><th>ส่วนสูง</th><th>วันที่วัด</th></tr></thead>
-            <tbody>
-              <tr v-for="m in parsedRows" :key="m.studentId">
-                <td>{{ nameOf(m.studentId) }}</td><td>{{ m.weightKg }} กก.</td><td>{{ m.heightCm }} ซม.</td><td>{{ m.date }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="review-head">
+          <h2>ตรวจสอบก่อนบันทึก</h2>
+          <span class="review-count">{{ parsedRows.length }} รายการ</span>
+        </div>
+        <p class="review-recap">
+          <b>ชั้น {{ grade }}/{{ room }}</b> · ภาคเรียนที่ {{ term }} · ครั้งที่ {{ round }} · ปีการศึกษา {{ year }}
+        </p>
+        <div class="preview-frame">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ชื่อ-สกุล</th><th>น้ำหนัก</th><th>ส่วนสูง</th><th>วันที่วัด</th></tr></thead>
+              <tbody>
+                <tr v-for="m in parsedRows" :key="m.studentId">
+                  <td>{{ nameOf(m.studentId) }}</td><td>{{ m.weightKg }} กก.</td><td>{{ m.heightCm }} ซม.</td><td>{{ m.date }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
         <div v-if="skipped.length" class="callout warn" style="margin-top: var(--s4)">
           <div class="ct">⚠️ ข้ามไป {{ skipped.length }} แถว</div>
           <ul style="margin: 0; padding-left: 1.2em"><li v-for="(sk, i) in skipped" :key="i">แถว {{ sk.row }}: {{ sk.reason }}</li></ul>
         </div>
-        <div class="wiz-foot-stack">
-          <button class="btn lg" @click="step = 1">← เลือกไฟล์ใหม่</button>
+        <div class="wiz-actions">
           <button class="btn j lg" :disabled="!canSave" @click="save">บันทึกผลการวัด</button>
+          <button class="btn ghost back" @click="step = 1">← เลือกไฟล์ใหม่</button>
         </div>
       </div>
       <div v-else class="panel" style="text-align: center">
-        <div class="success-check j">✓</div>
+        <div class="success-check j lg">✓</div>
         <div class="section-title" style="margin-bottom: var(--s2)">บันทึกผลการวัดเรียบร้อย</div>
+        <p class="success-sub"><b>ชั้น {{ grade }}/{{ room }}</b> · ภาคเรียนที่ {{ term }} · ครั้งที่ {{ round }} · ปีการศึกษา {{ year }}</p>
         <div class="tally">
           <div class="t accent"><div class="n">{{ result.added }}</div><div class="l">บันทึกใหม่</div></div>
           <div class="t"><div class="n">{{ result.updated }}</div><div class="l">อัปเดต</div></div>
           <div v-if="result.orphans" class="t warn"><div class="n">{{ result.orphans }}</div><div class="l">รหัสไม่ตรง</div></div>
         </div>
-        <button class="btn j lg" @click="emit('done')">เสร็จสิ้น</button>
+        <div class="wiz-actions">
+          <button class="btn j lg" @click="emit('done')">เสร็จสิ้น</button>
+        </div>
       </div>
     </div>
   </div>
