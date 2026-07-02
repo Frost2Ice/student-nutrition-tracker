@@ -18,4 +18,25 @@ describe('findRef', () => {
   it('respects gender split', () => {
     expect(findRef('หญิง', 24)).toEqual(AGE_DATA['F-24']);
   });
+
+  // A student who is 18-and-some-months is still "18 years old": ages between the
+  // terminal reference row (216mo = 18y0m) and 19y (228mo) use the 216 row rather
+  // than dropping out of assessment.
+  describe('18-and-fraction stays in range', () => {
+    it('exact terminal age (18y0m)', () => {
+      expect(findRef('ชาย', 216)).toEqual(AGE_DATA['M-216']);
+      expect(findRef('หญิง', 216)).toEqual(AGE_DATA['F-216']);
+    });
+    it('18y6m (was already ok)', () => {
+      expect(findRef('ชาย', 222)).toEqual(AGE_DATA['M-216']);
+    });
+    it('18y11m / ~18y300d clamps to the 216 row (previously null)', () => {
+      expect(findRef('ชาย', 227)).toEqual(AGE_DATA['M-216']);
+      expect(findRef('หญิง', 227)).toEqual(AGE_DATA['F-216']);
+    });
+    it('19y0m and older is out of range (over 18)', () => {
+      expect(findRef('ชาย', 228)).toBeNull();
+      expect(findRef('ชาย', 240)).toBeNull();
+    });
+  });
 });

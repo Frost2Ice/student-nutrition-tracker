@@ -86,10 +86,10 @@ describe('normalizeThaiDate', () => {
     expect(r).toEqual({ value: '15/3/2558', converted: true });
   });
 
-  // 2-digit CE year → assume 20xx + 543
-  it('converts 2-digit CE year to BE (converted:true)', () => {
-    const r = normalizeThaiDate('15/3/15');
-    expect(r).toEqual({ value: '15/3/2558', converted: true });
+  // 2-digit year → BE short (2500 + yy)
+  it('converts 2-digit year to BE short (converted:true)', () => {
+    const r = normalizeThaiDate('15/3/65');
+    expect(r).toEqual({ value: '15/3/2565', converted: true });
   });
 
   // Invalid calendar day → null
@@ -129,5 +129,42 @@ describe('normalizeThaiDate', () => {
     expect(r!.value).toBe('15/3/2558');
     // Ensure year is not mangled to CE+543 = 3101
     expect(r!.value).not.toContain('3101');
+  });
+});
+
+describe('normalizeThaiDate — extended formats', () => {
+  const val = (s: string) => normalizeThaiDate(s)?.value ?? null;
+
+  it('parses dot and dash separators', () => {
+    expect(val('02.10.2565')).toBe('2/10/2565');
+    expect(val('02-10-2565')).toBe('2/10/2565');
+  });
+  it('parses Thai month names', () => {
+    expect(val('02 ต.ค. 2565')).toBe('2/10/2565');
+    expect(val('2 ตุลาคม 2565')).toBe('2/10/2565');
+  });
+  it('converts CE years to BE', () => {
+    expect(val('02-10-2022')).toBe('2/10/2565');
+  });
+  it('parses Thai numerals', () => {
+    expect(val('๐๒-๑๐-๒๕๖๕')).toBe('2/10/2565');
+  });
+  it('parses mixed Thai/Arabic numerals', () => {
+    expect(val('๒ ต.ค. 2565')).toBe('2/10/2565');
+  });
+  it('tolerates irregular whitespace', () => {
+    expect(val('  2  ต.ค.  2565 ')).toBe('2/10/2565');
+  });
+  it('expands 2-digit years to BE and marks converted', () => {
+    expect(val('02/10/65')).toBe('2/10/2565');
+    expect(val('02-10-65')).toBe('2/10/2565');
+    expect(val('2 ต.ค. 65')).toBe('2/10/2565');
+    expect(val('๒ ต.ค. ๖๕')).toBe('2/10/2565');
+    expect(normalizeThaiDate('02/10/65')?.converted).toBe(true);
+  });
+  it('rejects impossible or unparseable values', () => {
+    expect(normalizeThaiDate('32/13/2565')).toBeNull();
+    expect(normalizeThaiDate('2565')).toBeNull();
+    expect(normalizeThaiDate('abc')).toBeNull();
   });
 });

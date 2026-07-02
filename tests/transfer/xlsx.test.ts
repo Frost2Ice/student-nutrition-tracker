@@ -15,6 +15,11 @@ import {
   mergeMeasures,
   aoaToXlsxBlob,
   readXlsxToAoa,
+  hasLegacyDobColumns,
+  gridRowsToAoa,
+  parseClipboardGrid,
+  COL_MISALIGN_MSG,
+  mergeStudents,
 } from '../../src/domain/transfer/xlsx';
 import type { MergeStore } from '../../src/domain/transfer/xlsx';
 import type { Measurement, Student } from '../../src/domain/types';
@@ -28,7 +33,7 @@ describe('xlsx AOA builders', () => {
     expect(measureTemplateAoa()[0]).toEqual([...MEASURE_HEADERS]);
   });
 
-  it('studentsToAoa emits header + one row per student with split DOB columns', () => {
+  it('studentsToAoa emits header + one row per student with single DOB column', () => {
     const students = [
       {
         id: '10001',
@@ -42,7 +47,7 @@ describe('xlsx AOA builders', () => {
     ];
     const aoa = studentsToAoa(students);
     expect(aoa[0]).toEqual([...STUDENT_HEADERS]);
-    expect(aoa[1]).toEqual(['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1']);
+    expect(aoa[1]).toEqual(['10001', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1']);
   });
 });
 
@@ -50,7 +55,7 @@ describe('parseStudentAoa', () => {
   it('skips a row missing id with a reason', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1'],
+      ['', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1'],
     ];
     const { rows, skipped } = parseStudentAoa(aoa);
     expect(rows).toHaveLength(0);
@@ -62,7 +67,7 @@ describe('parseStudentAoa', () => {
   it('skips a row missing ชื่อ', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['10001', '', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1'],
+      ['10001', '', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1'],
     ];
     const { rows, skipped } = parseStudentAoa(aoa);
     expect(rows).toHaveLength(0);
@@ -72,7 +77,7 @@ describe('parseStudentAoa', () => {
   it('defaults gender to ชาย when blank/invalid', () => {
     const aoa = [
       [...STUDENT_HEADERS],
-      ['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', '', 'ป.1', '1'],
+      ['10001', 'สมชาย', 'ใจดี', '15/3/2558', '', 'ป.1', '1'],
     ];
     const { rows } = parseStudentAoa(aoa);
     expect(rows[0].gender).toBe('ชาย');
@@ -137,9 +142,9 @@ describe('parseMeasureAoa', () => {
 });
 
 describe('STUDENT_CLASSROOM_HEADERS', () => {
-  it('contains exactly the 7 classroom columns with split DOB', () => {
+  it('contains exactly the 5 classroom columns with single DOB', () => {
     expect(STUDENT_CLASSROOM_HEADERS).toEqual([
-      'รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด-วัน','วันเกิด-เดือน','วันเกิด-ปี(พ.ศ.)','เพศ',
+      'รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด','เพศ',
     ]);
   });
 });
@@ -150,20 +155,20 @@ describe('studentClassroomTemplateAoa', () => {
     expect(aoa[0]).toEqual([...STUDENT_CLASSROOM_HEADERS]);
   });
 
-  it('returns example data row with split DOB as second row', () => {
+  it('returns example data row with single DOB as second row', () => {
     const aoa = studentClassroomTemplateAoa();
-    expect(aoa[1]).toEqual(['10001','สมชาย','ใจดี','15','3','2558','ชาย']);
+    expect(aoa[1]).toEqual(['10001','สมชาย','ใจดี','15/3/2558','ชาย']);
   });
 });
 
 describe('parseStudentImport', () => {
   const ctx = { grade: 'ป.1', room: '1' };
 
-  // New 7-column format: id, firstName, lastName, day, month, year, gender
+  // 5-column format: id, firstName, lastName, dob, gender
   const validRow = (overrides: Partial<Record<string,string>> = {}) => {
-    const base = { id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', day: '15', month: '3', year: '2558', gender: 'ชาย' };
+    const base = { id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', dob: '15/3/2558', gender: 'ชาย' };
     const merged = { ...base, ...overrides };
-    return [merged.id, merged.firstName, merged.lastName, merged.day, merged.month, merged.year, merged.gender];
+    return [merged.id, merged.firstName, merged.lastName, merged.dob, merged.gender];
   };
 
   it('clean row → status ok, student built with grade/room from ctx, rowNum=2', () => {
@@ -182,17 +187,17 @@ describe('parseStudentImport', () => {
     expect(counts).toEqual({ ok: 1, update: 0, error: 0 });
   });
 
-  it('bad dob (missing year) → status error กรอกวันเกิดให้ครบ, rowNum correct', () => {
+  it('bad dob (empty) → status error กรอกวันเกิด, rowNum correct', () => {
     const aoa = [
       [...STUDENT_CLASSROOM_HEADERS],
-      validRow({ year: '' }),
+      validRow({ dob: '' }),
     ];
     const { rows, counts } = parseStudentImport(aoa, ctx, new Set());
     expect(rows[0].status).toBe('error');
     expect(rows[0].student).toBeNull();
     expect(rows[0].rowNum).toBe(2);
     const msgs = rows[0].issues.map(i => i.message);
-    expect(msgs).toContain('กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)');
+    expect(msgs.some(m => m.includes('กรอกวันเกิด'))).toBe(true);
     expect(counts.error).toBe(1);
   });
 
@@ -227,7 +232,7 @@ describe('parseStudentImport', () => {
     expect(rows[0].status).toBe('update');
     expect(rows[0].student).not.toBeNull();
     const msgs = rows[0].issues.map(i => i.message);
-    expect(msgs).toContain('มีรหัสนี้อยู่แล้ว — จะอัปเดตข้อมูลเดิม');
+    expect(msgs).toContain('มีรหัสนี้อยู่แล้ว');
     expect(counts).toEqual({ ok: 0, update: 1, error: 0 });
   });
 
@@ -235,7 +240,7 @@ describe('parseStudentImport', () => {
     const aoa = [
       [...STUDENT_CLASSROOM_HEADERS],
       validRow(),
-      ['10001', 'สมหญิง', 'ดีใจ', '1', '1', '2558', 'หญิง'],
+      ['10001', 'สมหญิง', 'ดีใจ', '1/1/2558', 'หญิง'],
     ];
     const { rows, counts } = parseStudentImport(aoa, ctx, new Set());
     expect(rows[0].status).toBe('error');
@@ -272,23 +277,21 @@ describe('parseStudentImport', () => {
 });
 
 // ---------------------------------------------------------------------------
-// parseStudentImport — three-column DOB (วัน/เดือน/ปี split)
+// parseStudentImport — single-column DOB + override
 // ---------------------------------------------------------------------------
-describe('parseStudentImport — three-column DOB', () => {
+describe('parseStudentImport — single-column DOB', () => {
   const ctx = { grade: 'ป.1', room: '1' };
-  // New 7-column format: id, firstName, lastName, day, month, year, gender
-  const NEW_HEADERS = ['รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด-วัน','วันเกิด-เดือน','วันเกิด-ปี(พ.ศ.)','เพศ'];
-
-  const validRow3 = (overrides: Partial<Record<string,string>> = {}) => {
-    const base = { id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', day: '15', month: '3', year: '2558', gender: 'ชาย' };
+  // 5-column format: id, firstName, lastName, วันเกิด, gender
+  const validRow5 = (overrides: Partial<Record<string,string>> = {}) => {
+    const base = { id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', dob: '15/3/2558', gender: 'ชาย' };
     const merged = { ...base, ...overrides };
-    return [merged.id, merged.firstName, merged.lastName, merged.day, merged.month, merged.year, merged.gender];
+    return [merged.id, merged.firstName, merged.lastName, merged.dob, merged.gender];
   };
 
-  it('valid three-column DOB → status ok, dob canonical D/M/YYYY', () => {
+  it('valid single DOB → status ok, dob canonical D/M/YYYY', () => {
     const aoa = [
-      NEW_HEADERS,
-      validRow3(),
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5(),
     ];
     const { rows, counts } = parseStudentImport(aoa, ctx, new Set(), undefined, 2567);
     expect(rows).toHaveLength(1);
@@ -297,32 +300,32 @@ describe('parseStudentImport — three-column DOB', () => {
     expect(counts).toEqual({ ok: 1, update: 0, error: 0 });
   });
 
-  it('missing month (blank) → error กรอกวันเกิดให้ครบ', () => {
+  it('empty dob → error กรอกวันเกิด', () => {
     const aoa = [
-      NEW_HEADERS,
-      validRow3({ month: '' }),
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5({ dob: '' }),
     ];
     const { rows } = parseStudentImport(aoa, ctx, new Set(), undefined, 2567);
     expect(rows[0].status).toBe('error');
     const msgs = rows[0].issues.map(i => i.message);
-    expect(msgs).toContain('กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)');
+    expect(msgs.some(m => m.includes('กรอกวันเกิด'))).toBe(true);
   });
 
-  it('missing day (blank) → error กรอกวันเกิดให้ครบ', () => {
+  it('unparseable dob → error อ่านวันเกิดไม่ได้', () => {
     const aoa = [
-      NEW_HEADERS,
-      validRow3({ day: '' }),
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5({ dob: 'ไม่รู้' }),
     ];
     const { rows } = parseStudentImport(aoa, ctx, new Set(), undefined, 2567);
     expect(rows[0].status).toBe('error');
     const msgs = rows[0].issues.map(i => i.message);
-    expect(msgs).toContain('กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)');
+    expect(msgs.some(m => m.includes('อ่านวันเกิดไม่ได้'))).toBe(true);
   });
 
   it('out-of-window year → error from validateThaiDate', () => {
     const aoa = [
-      NEW_HEADERS,
-      validRow3({ year: '2500' }),  // way too old for periodYear=2567
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5({ dob: '15/3/2500' }),  // way too old for periodYear=2567
     ];
     const { rows } = parseStudentImport(aoa, ctx, new Set(), undefined, 2567);
     expect(rows[0].status).toBe('error');
@@ -330,10 +333,10 @@ describe('parseStudentImport — three-column DOB', () => {
     expect(msgs.some(m => m.includes('ปีเกิด'))).toBe(true);
   });
 
-  it('existing id in three-column format → status update', () => {
+  it('existing id → status update', () => {
     const aoa = [
-      NEW_HEADERS,
-      validRow3(),
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5(),
     ];
     const { rows, counts } = parseStudentImport(aoa, ctx, new Set(['10001']), undefined, 2567);
     expect(rows[0].status).toBe('update');
@@ -341,11 +344,11 @@ describe('parseStudentImport — three-column DOB', () => {
     expect(counts).toEqual({ ok: 0, update: 1, error: 0 });
   });
 
-  it('override dob replaces three-column values', () => {
-    // Row has blank month (would error), but override provides full canonical dob
+  it('override dob replaces raw cell value', () => {
+    // Row has blank dob (would error), but override provides full canonical dob
     const aoa = [
-      NEW_HEADERS,
-      validRow3({ month: '' }),
+      [...STUDENT_CLASSROOM_HEADERS],
+      validRow5({ dob: '' }),
     ];
     const overrides = new Map([[2, { dob: '1/6/2558' }]]);
     const { rows } = parseStudentImport(aoa, ctx, new Set(), overrides, 2567);
@@ -575,6 +578,53 @@ describe('SheetJS round-trip', () => {
   });
 });
 
+describe('single-column DOB', () => {
+  it('headers use one วันเกิด column', () => {
+    expect(STUDENT_HEADERS).toEqual(['รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด','เพศ','ชั้น','ห้อง']);
+    expect(STUDENT_CLASSROOM_HEADERS).toEqual(['รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด','เพศ']);
+  });
+
+  it('detects legacy 3-column header', () => {
+    expect(hasLegacyDobColumns(['รหัสนักเรียน','ชื่อ','นามสกุล','วันเกิด-วัน','วันเกิด-เดือน','วันเกิด-ปี(พ.ศ.)','เพศ'])).toBe(true);
+    expect(hasLegacyDobColumns([...STUDENT_HEADERS])).toBe(false);
+  });
+
+  it('parseStudentAoa reads a single DOB cell', () => {
+    const aoa = [[...STUDENT_HEADERS], ['10001','สมชาย','ใจดี','2/10/2558','ชาย','ป.1','1']];
+    const { rows, skipped } = parseStudentAoa(aoa);
+    expect(skipped).toHaveLength(0);
+    expect(rows[0].dob).toBe('2/10/2558');
+  });
+
+  it('round-trips studentsToAoa → parseStudentAoa', () => {
+    const s = { id: '10001', firstName: 'สมชาย', lastName: 'ใจดี', dob: '2/10/2558', gender: 'ชาย' as const, grade: 'ป.1', room: '1' };
+    const aoa = studentsToAoa([s]);
+    expect(aoa[0]).toEqual([...STUDENT_HEADERS]);
+    expect(parseStudentAoa(aoa).rows[0]).toMatchObject({ id: '10001', dob: '2/10/2558' });
+  });
+
+  it('preview normalizes a single DOB cell and flags unparseable as error', () => {
+    const aoa = [[...STUDENT_CLASSROOM_HEADERS],
+      ['10001','สมชาย','ใจดี','2 ต.ค. 2558','ชาย'],
+      ['10002','สมหญิง','ใจงาม','ไม่รู้','หญิง']];
+    const { rows } = parseStudentImport(aoa, { grade: 'ป.1', room: '1' }, new Set(), undefined, 2569);
+    expect(rows[0].dob).toBe('2/10/2558');
+    expect(rows[1].status).toBe('error');
+    expect(rows[1].hasDateError).toBe(true);
+  });
+
+  it('parseClipboardGrid reads a single DOB cell', () => {
+    const grid = parseClipboardGrid('10001\tสมชาย\tใจดี\t2/10/2558\tชาย');
+    expect(grid[0].dob).toBe('2/10/2558');
+  });
+
+  it('gridRowsToAoa emits one DOB column', () => {
+    const aoa = gridRowsToAoa([{ id: '10001', firstName: 'ส', lastName: 'ใจดี', gender: 'ชาย', dob: '2/10/2558' }]);
+    expect(aoa[0]).toEqual([...STUDENT_CLASSROOM_HEADERS]);
+    expect(aoa[1]).toEqual(['10001','ส','ใจดี','2/10/2558','ชาย']);
+  });
+});
+
 describe('mergeMeasures (upsert: one record per round)', () => {
   function makeStore(students: Student[], initial: Measurement[]): MergeStore & { all: Measurement[] } {
     const all = [...initial];
@@ -621,5 +671,71 @@ describe('mergeMeasures (upsert: one record per round)', () => {
     const store = makeStore([], [mk(20)]);
     const res = mergeMeasures(store, [mk(25)]);
     expect(res.orphans).toBe(1);
+  });
+});
+
+describe('mergeStudents', () => {
+  function makeStudentStore(initial: Student[]): MergeStore {
+    const students = { value: [...initial] };
+    return {
+      students,
+      addStudent: (s: Student) => { students.value.push(s); },
+      updateStudent: (id: string, patch: Partial<Student>) => {
+        const i = students.value.findIndex((x) => x.id === id);
+        if (i >= 0) students.value[i] = { ...students.value[i], ...patch };
+      },
+    } as unknown as MergeStore;
+  }
+  const mk = (over: Partial<Student>): Student => ({
+    id: '10001', firstName: 'ก', lastName: 'ข', dob: '1/1/2558', gender: 'ชาย', grade: 'ป.1', room: '1', ...over,
+  });
+
+  it('updates personal fields but never moves an existing student to another room', () => {
+    const store = makeStudentStore([mk({ firstName: 'เก่า', grade: 'ป.2', room: '1' })]);
+    const res = mergeStudents(store, [mk({ firstName: 'ใหม่', gender: 'หญิง', dob: '2/2/2559', grade: 'ป.1', room: '3' })]);
+    expect(res).toEqual({ added: 0, updated: 1 });
+    const s = store.students.value[0];
+    expect(s.firstName).toBe('ใหม่');   // personal fields updated
+    expect(s.gender).toBe('หญิง');
+    expect(s.dob).toBe('2/2/2559');
+    expect(s.grade).toBe('ป.2');        // location NOT changed
+    expect(s.room).toBe('1');
+  });
+
+  it('adds a new student with the imported grade/room', () => {
+    const store = makeStudentStore([]);
+    const res = mergeStudents(store, [mk({ id: '20002', grade: 'ป.1', room: '3' })]);
+    expect(res).toEqual({ added: 1, updated: 0 });
+    expect(store.students.value[0]).toMatchObject({ id: '20002', grade: 'ป.1', room: '3' });
+  });
+});
+
+describe('column-misalignment guard (delimiter lost)', () => {
+  // A row that collapsed into one cell: the whole line landed in the id column.
+  const collapsed = '10099 สมชาย ใจดี 2 ต.ค. 2558 ชาย';
+
+  it('parseStudentAoa skips a collapsed row with the misalign message', () => {
+    const aoa = [[...STUDENT_HEADERS], [collapsed]];
+    const { rows, skipped } = parseStudentAoa(aoa);
+    expect(rows).toHaveLength(0);
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0].reason).toBe(COL_MISALIGN_MSG);
+  });
+
+  it('parseStudentImport flags a collapsed row once, without noisy field errors', () => {
+    const aoa = [[...STUDENT_CLASSROOM_HEADERS], [collapsed]];
+    const { rows } = parseStudentImport(aoa, { grade: 'ป.1', room: '1' }, new Set(), undefined, 2569);
+    expect(rows[0].status).toBe('error');
+    expect(rows[0].issues.some((i) => i.message === COL_MISALIGN_MSG)).toBe(true);
+    // the collapse must NOT also spew name/dob errors
+    expect(rows[0].issues.some((i) => i.message === 'ไม่มีชื่อ')).toBe(false);
+    expect(rows[0].issues.some((i) => i.message === 'กรอกวันเกิด (วัน/เดือน/ปี พ.ศ.)')).toBe(false);
+  });
+
+  it('a properly tab-split row with a spaced Thai-month DOB still passes', () => {
+    const aoa = [[...STUDENT_CLASSROOM_HEADERS], ['10099', 'สมชาย', 'ใจดี', '2 ต.ค. 2558', 'ชาย']];
+    const { rows } = parseStudentImport(aoa, { grade: 'ป.1', room: '1' }, new Set(), undefined, 2569);
+    expect(rows[0].status).toBe('ok');
+    expect(rows[0].dob).toBe('2/10/2558');
   });
 });

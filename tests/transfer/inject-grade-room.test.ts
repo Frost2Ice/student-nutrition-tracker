@@ -6,10 +6,10 @@ import {
 
 describe('injectGradeRoom', () => {
   it('appends grade/room to each row and normalizes the header to STUDENT_HEADERS', () => {
-    const aoa = [[...STUDENT_CLASSROOM_HEADERS], ['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย']];
+    const aoa = [[...STUDENT_CLASSROOM_HEADERS], ['10001', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย']];
     const full = injectGradeRoom(aoa, 'ป.1', '2');
     expect(full[0]).toEqual([...STUDENT_HEADERS]);
-    expect(full[1]).toEqual(['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '2']);
+    expect(full[1]).toEqual(['10001', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '2']);
   });
 
   it('round-trips classroom template → parseStudentAoa with the picked grade/room', () => {
@@ -20,7 +20,7 @@ describe('injectGradeRoom', () => {
   });
 
   it('works with pasted classroom rows (no grade/room in the paste)', () => {
-    const aoa = pasteToAoa('20001\tมานี\tดี\t1\t1\t2559\tหญิง', STUDENT_CLASSROOM_HEADERS);
+    const aoa = pasteToAoa('20001\tมานี\tดี\t1/1/2559\tหญิง', STUDENT_CLASSROOM_HEADERS);
     const { rows } = parseStudentAoa(injectGradeRoom(aoa, 'ป.2', '3'));
     expect(rows[0]).toMatchObject({ id: '20001', grade: 'ป.2', room: '3', gender: 'หญิง' });
   });
