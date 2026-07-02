@@ -267,7 +267,7 @@ function writeImportSamples() {
 
   const ROSTER_HEADERS = [
     'รหัสนักเรียน','ชื่อ','นามสกุล',
-    'วันเกิด-วัน','วันเกิด-เดือน','วันเกิด-ปี(พ.ศ.)',
+    'วันเกิด',
     'เพศ',
   ];
   const MEASURE_HEADERS = [
@@ -292,13 +292,13 @@ function writeImportSamples() {
 
       const id = String(sampleIdCounter++);
 
-      // DOB: Buddhist-era year = CURRENT_CE - age + 543
+      // DOB: single D/M/BE string via thaiDate helper
       const dobCeYear = CURRENT_CE - age;
       const dobMonth = ri2(1, 12);
       const dobDay = ri2(1, 28);
-      const dobBeYear = dobCeYear + 543; // Buddhist era
+      const dob = thaiDate(dobCeYear, dobMonth, dobDay); // D/M/BE
 
-      rosterRows.push([id, firstName, lastName, dobDay, dobMonth, dobBeYear, gender]);
+      rosterRows.push([id, firstName, lastName, dob, gender]);
 
       // Weight / height with ~20% at-risk (every 5th student is thin, every 7th overweight, every 11th short)
       const { wBase, hBase } = baselineForAge(age);
