@@ -1,4 +1,4 @@
-import type { Student, Measurement, Setup } from '../types';
+import type { Student, Measurement, Setup, Round } from '../types';
 import { calcNutrition } from '../nutrition/engine';
 import { latestPerStudent } from '../nutrition/latest';
 import { GRADE_ORDER } from '../grade/ladder';
@@ -37,13 +37,15 @@ export function summarize(
   measures: Measurement[],
   year: string,
   term: string,
+  round: Round,
 ): ReportSummary {
   const enrolled = students.length;
 
-  // Filter to matching year+term
-  const filtered = measures.filter((m) => m.year === year && m.term === term);
+  // Filter to matching year+term+round (round is a real filter, not cosmetic —
+  // each report shows exactly one measurement round)
+  const filtered = measures.filter((m) => m.year === year && m.term === term && m.round === round);
 
-  // Latest measurement per student within that period
+  // If a room re-measured a student twice within the same round, keep the latest-saved one
   const latestMap = latestPerStudent(filtered);
 
   // Gather grade → counts
@@ -94,14 +96,26 @@ export function summaryToAoa(
   summary: ReportSummary,
   year: string,
   term: string,
+  round: Round,
 ): (string | number)[][] {
   const aoa: (string | number)[][] = [];
 
-  // Header info
-  aoa.push(['โรงเรียน', setup.school]);
-  aoa.push(['จังหวัด', setup.province]);
+  // Header info — omit a row entirely when the value is blank (legacy profiles
+  // without a school code, or schools that never filled optional address fields)
+  const headerLine = (label: string, value: string | undefined) => {
+    if (value) aoa.push([label, value]);
+  };
+
+  headerLine('โรงเรียน', setup.school);
+  headerLine('รหัสโรงเรียน', setup.code);
+  headerLine('สังกัดกระทรวง', setup.ministry);
+  headerLine('สังกัดกรม/หน่วยงาน', setup.department);
+  headerLine('ตำบล/แขวง', setup.subdistrict);
+  headerLine('อำเภอ/เขต', setup.district);
+  headerLine('จังหวัด', setup.province);
   aoa.push(['ปีการศึกษา', year]);
   aoa.push(['ภาคเรียน', term]);
+  aoa.push(['ครั้งที่วัด', round]);
   aoa.push(['นักเรียนทั้งหมด', summary.enrolled]);
   aoa.push(['นักเรียนที่วัด', summary.measured]);
   aoa.push([]);

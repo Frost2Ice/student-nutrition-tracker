@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'ReportsView' });
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useData } from '../stores/data';
 import { useSchool } from '../stores/school';
 import { useHeader } from '../stores/header';
@@ -8,7 +8,8 @@ import { summarize, summaryToAoa, WFH_BUCKET_LABELS } from '../domain/report/sum
 import { printElement } from './print';
 import { aoaToXlsxBlob } from '../domain/transfer/xlsx';
 import { downloadBlob } from './download';
-import type { Term } from '../domain/types';
+import type { Term, Round } from '../domain/types';
+import { defaultRound, type Session } from '../domain/measure/default-round';
 
 const data = useData();
 const school = useSchool();
@@ -18,6 +19,7 @@ onMounted(() => header.setHeader({ title: 'รายงาน', back: null, cont
 // Report can view ANY academic year read-only; default to the active year.
 const selectedYear = ref(school.activeYear ?? data.period.year ?? '2568');
 const term = ref<Term>('1');
+const round = ref<Round>('1');
 
 // Year picker options: every year recorded in the school manifest.
 const yearOptions = computed(() => school.listYears().map((m) => m.year));
@@ -31,8 +33,20 @@ const yearData = computed(() => {
   return { students: data.students, measures: data.measures };
 });
 
+// Auto-default term+round to the latest session with data whenever the
+// selected year changes. The user can still override either dropdown after.
+function applyDefaultSession() {
+  const measures = yearData.value.measures;
+  const session: Session = defaultRound((s) =>
+    measures.some((m) => m.term === s.term && m.round === s.round),
+  );
+  term.value = session.term;
+  round.value = session.round;
+}
+watch(selectedYear, applyDefaultSession, { immediate: true });
+
 const summary = computed(() =>
-  summarize(yearData.value.students, yearData.value.measures, selectedYear.value, term.value),
+  summarize(yearData.value.students, yearData.value.measures, selectedYear.value, term.value, round.value),
 );
 
 const WFH_CATEGORIES = WFH_BUCKET_LABELS.map((label, i) => ({
@@ -46,6 +60,19 @@ const catTotals = computed(() =>
 );
 const tallTotal = computed(() => summary.value.tall);
 const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 0);
+
+// School identity lines for the printable header — only populated fields show.
+const identityLines = computed(() => {
+  const s = data.setup;
+  const lines: { label: string; value: string }[] = [];
+  if (s.code) lines.push({ label: 'รหัสโรงเรียน', value: s.code });
+  if (s.ministry) lines.push({ label: 'สังกัดกระทรวง', value: s.ministry });
+  if (s.department) lines.push({ label: 'สังกัดกรม/หน่วยงาน', value: s.department });
+  if (s.subdistrict) lines.push({ label: 'ตำบล/แขวง', value: s.subdistrict });
+  if (s.district) lines.push({ label: 'อำเภอ/เขต', value: s.district });
+  if (s.province) lines.push({ label: 'จังหวัด', value: s.province });
+  return lines;
+});
 
 const CRITERIA = {
   source: 'สำนักโภชนาการ กรมอนามัย',
@@ -71,10 +98,10 @@ function handlePrint() {
 
 function handleXlsx() {
   const blob = aoaToXlsxBlob(
-    summaryToAoa(data.setup, summary.value, selectedYear.value, term.value),
+    summaryToAoa(data.setup, summary.value, selectedYear.value, term.value, round.value),
     'สรุปโภชนาการ',
   );
-  downloadBlob(blob, `รายงานสรุป ${selectedYear.value} ภาค${term.value}.xlsx`);
+  downloadBlob(blob, `รายงานสรุป ${selectedYear.value} ภาค${term.value} ครั้งที่${round.value}.xlsx`);
 }
 </script>
 
@@ -92,6 +119,10 @@ function handleXlsx() {
         <label>ภาคเรียน</label>
         <select v-model="term"><option value="1">ภาคเรียน 1</option><option value="2">ภาคเรียน 2</option></select>
       </div>
+      <div class="field">
+        <label>ครั้งที่วัด</label>
+        <select v-model="round"><option value="1">ครั้งที่ 1</option><option value="2">ครั้งที่ 2</option></select>
+      </div>
       <span class="spacer"></span>
       <button class="btn primary lg" @click="handlePrint">🖨️ พิมพ์ / บันทึก PDF</button>
       <button class="btn lg" @click="handleXlsx">📊 ส่งออก Excel</button>
@@ -102,10 +133,11 @@ function handleXlsx() {
       <div class="doc-head">
         <div>
           <div class="doc-title">รายงานสรุปภาวะโภชนาการนักเรียน</div>
-          <div class="doc-school">{{ data.setup.school }} · จังหวัด{{ data.setup.province }}</div>
+          <div class="doc-school">{{ data.setup.school }}</div>
+          <div v-for="line in identityLines" :key="line.label" class="doc-identity">{{ line.label }}: {{ line.value }}</div>
         </div>
         <div class="doc-period">
-          <div>ปีการศึกษา {{ selectedYear }} · ภาคเรียน {{ term }}</div>
+          <div>ปีการศึกษา {{ selectedYear }} · ภาคเรียน {{ term }} · ครั้งที่ {{ round }}</div>
           <div class="muted">วันที่ออกรายงาน {{ today }}</div>
         </div>
       </div>
@@ -187,6 +219,7 @@ function handleXlsx() {
   padding-bottom: var(--s4); border-bottom: 2px solid var(--ink); margin-bottom: var(--s5); }
 .doc-title { font-size: 20px; font-weight: 800; }
 .doc-school { color: var(--ink-muted); margin-top: 2px; }
+.doc-identity { color: var(--ink-muted); font-size: 13px; margin-top: 1px; }
 .doc-period { text-align: right; font-weight: 600; }
 .doc-period .muted { color: var(--ink-muted); font-weight: 400; font-size: 13px; }
 
