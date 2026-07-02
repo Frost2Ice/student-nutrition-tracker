@@ -20,13 +20,16 @@
 ### Task 1: Rewrite OnboardingView.vue to 4-step wizard
 
 **Files:**
+
 - Modify: `src/features/OnboardingView.vue` (full rewrite of script + template)
 
 **Interfaces:**
+
 - Consumes: `useData()` → `saveSetup(next: Setup)`, `setPeriod({ year, term, round })`, `setClassrooms(...)`, `students`. `GRADE_ORDER: string[]` from `../domain/grade/ladder`. `Term` from `../domain/types`.
 - Produces: emits `done` and `exit` (unchanged).
 
 **State shape after rewrite:**
+
 ```ts
 const steps = ['ข้อมูลโรงเรียน', 'ปีการศึกษา', 'โครงสร้างชั้นเรียน', 'สรุปการตั้งค่า'];
 const schoolForm = ref({ school:'', ministry:'', department:'', subdistrict:'', district:'', province:'', teacher:'' }); // no maxGrade
@@ -40,6 +43,7 @@ const structure = ref<{ grade: string; rooms: number }[]>([]);
 Remove: `validateThaiDate` + `gradesUpTo` imports, `ImportDialog` import, `computed` (if now unused — keep only if used), all step-4 import/add state and functions (`importOpen`, `importGrade`, `importRoom`, `openImport`, `addErrors`, `studentForm`, `showAddForm`, `openAddForm`, `cancelAdd`, `submitStudent`, `roomCount`, `totalImported`).
 
 New script:
+
 ```ts
 <script setup lang="ts">
 import { ref } from 'vue';
@@ -102,6 +106,7 @@ function finish() { persistAll(); emit('done'); }
 Step 1 panel: remove the `ชั้นสูงสุดของโรงเรียน` field `<div>` (the `grid-column:1/-1` select block). Keep all other school fields. Footer button `@click="goToStep2"`.
 
 Step 2 (`v-else-if="i === 1"`): remove the `callout info` auto-guess block and the ภาคเรียน field. Panel keeps only the year field:
+
 ```html
 <div v-else-if="i === 1">
   <h1 class="page-title">ตั้งค่าปีการศึกษาปัจจุบัน</h1>
@@ -127,10 +132,10 @@ Step 2 (`v-else-if="i === 1"`): remove the `callout info` auto-guess block and t
 ```html
 <div v-else-if="i === 2">
   <h1 class="page-title">กำหนดโครงสร้างชั้นเรียน</h1>
-  <p class="page-sub">เลือกชั้นต่ำสุดและสูงสุดของโรงเรียน ระบบจะสร้างรายการชั้นให้ แล้วระบุจำนวนห้องของแต่ละชั้น แก้ไขภายหลังได้</p>
+  <p class="page-sub">เลือกชั้นเรียนเริ่มต้นและสูงสุดของโรงเรียน ระบบจะสร้างรายการชั้นให้ แล้วระบุจำนวนห้องของแต่ละชั้น แก้ไขภายหลังได้</p>
   <div class="panel">
     <div class="form-grid">
-      <div class="field"><label>ชั้นต่ำสุด</label>
+      <div class="field"><label>ชั้นเรียนเริ่มต้น</label>
         <select v-model="structureForm.minGrade" @change="rebuildStructure">
           <option v-for="gr in GRADE_ORDER" :key="gr" :value="gr">{{ gr }}</option>
         </select>
@@ -161,6 +166,7 @@ Step 2 (`v-else-if="i === 1"`): remove the `callout info` auto-guess block and t
 - [ ] **Step 4: Replace template step 4 (summary) and delete old steps 4–5 + ImportDialog**
 
 Remove old `v-else-if="i === 3"` import block, old `v-else` done screen, and `<ImportDialog .../>` element. New final step:
+
 ```html
 <div v-else>
   <h1 class="page-title">สรุปการตั้งค่า</h1>
