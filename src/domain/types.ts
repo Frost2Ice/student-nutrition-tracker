@@ -27,6 +27,7 @@ export interface Measurement {
 
 export interface Setup {
   school: string;
+  code?: string;
   ministry: string;
   department: string;
   subdistrict: string;
@@ -38,6 +39,7 @@ export interface Setup {
 
 export interface SchoolIdentity {
   school: string;
+  code?: string;
   ministry: string;
   department: string;
   subdistrict: string;

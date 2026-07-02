@@ -173,6 +173,10 @@ function doReset() {
             <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">ชื่อโรงเรียน</div>
             <input class="search" v-model="schoolDraft.school" style="width: 100%" />
           </label>
+          <label style="grid-column: 1/-1">
+            <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">รหัสโรงเรียน</div>
+            <input class="search" v-model="schoolDraft.code" style="width: 100%" />
+          </label>
           <label>
             <div style="font-size: 13px; color: var(--ink-muted); margin-bottom: 2px">จังหวัด</div>
             <input class="search" v-model="schoolDraft.province" style="width: 100%" />

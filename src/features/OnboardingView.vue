@@ -14,7 +14,7 @@ const back = () => (i.value = Math.max(i.value - 1, 0));
 
 // Step 1: School info
 const schoolForm = ref({
-  school: '', ministry: '', department: '', subdistrict: '',
+  school: '', code: '', ministry: '', department: '', subdistrict: '',
   district: '', province: '', teacher: '',
 });
 
@@ -72,6 +72,7 @@ function finish() { persistAll(); emit('done'); }
       <div class="panel">
         <div class="form-grid">
           <div class="field" style="grid-column: 1/-1"><label>ชื่อโรงเรียน</label><input v-model="schoolForm.school" /></div>
+          <div class="field"><label>รหัสโรงเรียน</label><input v-model="schoolForm.code" /></div>
           <div class="field"><label>สังกัดกระทรวง</label><input v-model="schoolForm.ministry" /></div>
           <div class="field"><label>สังกัดกรม/หน่วยงาน</label><input v-model="schoolForm.department" /></div>
           <div class="field"><label>ตำบล/แขวง</label><input v-model="schoolForm.subdistrict" /></div>
@@ -109,10 +110,10 @@ function finish() { persistAll(); emit('done'); }
     <!-- 3 structure -->
     <div v-else-if="i === 2">
       <h1 class="page-title">กำหนดโครงสร้างชั้นเรียน</h1>
-      <p class="page-sub">เลือกชั้นต่ำสุดและสูงสุดของโรงเรียน ระบบจะสร้างรายการชั้นให้ แล้วระบุจำนวนห้องของแต่ละชั้น แก้ไขภายหลังได้</p>
+      <p class="page-sub">เลือกชั้นเรียนเริ่มต้นและสูงสุดของโรงเรียน ระบบจะสร้างรายการชั้นให้ แล้วระบุจำนวนห้องของแต่ละชั้น แก้ไขภายหลังได้</p>
       <div class="panel">
         <div class="form-grid">
-          <div class="field"><label>ชั้นต่ำสุด</label>
+          <div class="field"><label>ชั้นเรียนเริ่มต้น</label>
             <select v-model="structureForm.minGrade" @change="rebuildStructure">
               <option v-for="gr in GRADE_ORDER" :key="gr" :value="gr">{{ gr }}</option>
             </select>
@@ -148,6 +149,7 @@ function finish() { persistAll(); emit('done'); }
         <div class="ct" style="font-weight:600; margin-bottom: var(--s2)">ข้อมูลโรงเรียน</div>
         <div class="form-grid">
           <div class="field"><label>ชื่อโรงเรียน</label><div>{{ schoolForm.school || '—' }}</div></div>
+          <div class="field"><label>รหัสโรงเรียน</label><div>{{ schoolForm.code || '—' }}</div></div>
           <div class="field"><label>สังกัดกระทรวง</label><div>{{ schoolForm.ministry || '—' }}</div></div>
           <div class="field"><label>สังกัดกรม/หน่วยงาน</label><div>{{ schoolForm.department || '—' }}</div></div>
           <div class="field"><label>ตำบล/แขวง</label><div>{{ schoolForm.subdistrict || '—' }}</div></div>
