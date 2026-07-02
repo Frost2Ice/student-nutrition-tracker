@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineOptions({ name: 'ThaiDateField' });
-import { computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = withDefaults(defineProps<{
   modelValue: string;
@@ -30,11 +30,29 @@ function parse(v: string): { d: number; m: number; y: number } | null {
   return { d, m, y };
 }
 
-const parsed = computed(() => parse(props.modelValue));
+// Local part state, so a partial selection (day chosen, month/year not yet)
+// persists in the UI. The value emitted upward is only canonical once all three
+// are set; until then the parent gets '' — but that '' echo must NOT wipe the
+// in-progress local parts (that was the "first pick doesn't stick" bug).
+const selDay = ref(0);
+const selMonth = ref(0);
+const selYear = ref(0);
 
-const selDay = computed(() => parsed.value?.d ?? 0);
-const selMonth = computed(() => parsed.value?.m ?? 0);
-const selYear = computed(() => parsed.value?.y ?? 0);
+function applyParts(p: { d: number; m: number; y: number } | null) {
+  selDay.value = p?.d ?? 0;
+  selMonth.value = p?.m ?? 0;
+  selYear.value = p?.y ?? 0;
+}
+applyParts(parse(props.modelValue));
+
+// Resync only when the parent pushes a real, parseable date (e.g. paste/normalize).
+// Ignore '' / unparseable echoes so a mid-entry partial selection survives.
+watch(() => props.modelValue, (v) => {
+  const p = parse(v);
+  if (p && (p.d !== selDay.value || p.m !== selMonth.value || p.y !== selYear.value)) {
+    applyParts(p);
+  }
+});
 
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 const months = THAI_MONTHS.map((label, i) => ({ label, value: i + 1 }));
@@ -44,22 +62,25 @@ const years = computed(() => {
   return arr;
 });
 
-function emit3(d: number, m: number, y: number) {
-  if (d > 0 && m > 0 && y > 0) {
-    emit('update:modelValue', `${d}/${m}/${y}`);
+function emitCurrent() {
+  if (selDay.value > 0 && selMonth.value > 0 && selYear.value > 0) {
+    emit('update:modelValue', `${selDay.value}/${selMonth.value}/${selYear.value}`);
   } else {
     emit('update:modelValue', '');
   }
 }
 
 function onDay(e: Event) {
-  emit3(parseInt((e.target as HTMLSelectElement).value, 10), selMonth.value, selYear.value);
+  selDay.value = parseInt((e.target as HTMLSelectElement).value, 10) || 0;
+  emitCurrent();
 }
 function onMonth(e: Event) {
-  emit3(selDay.value, parseInt((e.target as HTMLSelectElement).value, 10), selYear.value);
+  selMonth.value = parseInt((e.target as HTMLSelectElement).value, 10) || 0;
+  emitCurrent();
 }
 function onYear(e: Event) {
-  emit3(selDay.value, selMonth.value, parseInt((e.target as HTMLSelectElement).value, 10));
+  selYear.value = parseInt((e.target as HTMLSelectElement).value, 10) || 0;
+  emitCurrent();
 }
 </script>
 
@@ -88,19 +109,19 @@ function onYear(e: Event) {
 }
 .tdf-sel {
   border: 1px solid var(--line, #d0d5dd);
-  border-radius: 6px;
-  padding: 3px 4px;
-  font-size: 13px;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 15px;
   background: var(--surface, #fff);
   color: var(--ink, #1a1a2e);
   cursor: pointer;
-  height: 28px;
+  height: 42px;
 }
 .tdf-sel:focus {
   outline: 2px solid var(--brand, #3b6ef8);
   outline-offset: 1px;
 }
-.tdf-day  { width: 52px; }
-.tdf-mon  { width: 68px; }
-.tdf-yr   { width: 82px; }
+.tdf-day  { width: 58px; }
+.tdf-mon  { width: 76px; }
+.tdf-yr   { width: 92px; }
 </style>
