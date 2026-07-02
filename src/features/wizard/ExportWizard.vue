@@ -39,7 +39,7 @@ function pickGrade(g: string) { grade.value = g; activePick.value = 2; }
 
 function exportXlsx() {
   const aoa = studentsToAoa(selected.value);
-  downloadBlob(aoaToXlsxBlob(aoa, 'รายชื่อ', [0]), `รายชื่อนักเรียน-${scopeLabel.value}.xlsx`);
+  downloadBlob(aoaToXlsxBlob(aoa, 'รายชื่อ', [0, 3]), `รายชื่อนักเรียน-${scopeLabel.value}.xlsx`);
   step.value = 2;
 }
 </script>

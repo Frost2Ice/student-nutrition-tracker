@@ -17,27 +17,21 @@ import { normalizeThaiDate, formatThaiDate } from '../date/thai-date';
 // Headers (exact Thai column labels)
 // ---------------------------------------------------------------------------
 export const STUDENT_HEADERS = [
-  'รหัสนักเรียน',
-  'ชื่อ',
-  'นามสกุล',
-  'วันเกิด-วัน',
-  'วันเกิด-เดือน',
-  'วันเกิด-ปี(พ.ศ.)',
-  'เพศ',
-  'ชั้น',
-  'ห้อง',
+  'รหัสนักเรียน', 'ชื่อ', 'นามสกุล', 'วันเกิด', 'เพศ', 'ชั้น', 'ห้อง',
 ] as const;
 
 /** Per-classroom import template — no grade/room columns (taken from picker). */
 export const STUDENT_CLASSROOM_HEADERS = [
-  'รหัสนักเรียน',
-  'ชื่อ',
-  'นามสกุล',
-  'วันเกิด-วัน',
-  'วันเกิด-เดือน',
-  'วันเกิด-ปี(พ.ศ.)',
-  'เพศ',
+  'รหัสนักเรียน', 'ชื่อ', 'นามสกุล', 'วันเกิด', 'เพศ',
 ] as const;
+
+const LEGACY_DOB_HEADERS = ['วันเกิด-วัน', 'วันเกิด-เดือน', 'วันเกิด-ปี(พ.ศ.)'];
+
+/** True when a header row still uses the old 3-column DOB layout. */
+export function hasLegacyDobColumns(headerRow: string[]): boolean {
+  const trimmed = headerRow.map((h) => (h ?? '').trim());
+  return LEGACY_DOB_HEADERS.some((h) => trimmed.includes(h));
+}
 
 export const MEASURE_HEADERS = [
   'รหัสนักเรียน',
@@ -62,14 +56,14 @@ export const MEASURE_ROSTER_HEADERS = [
 export function studentTemplateAoa(): string[][] {
   return [
     [...STUDENT_HEADERS],
-    ['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย', 'ป.1', '1'],
+    ['10001', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย', 'ป.1', '1'],
   ];
 }
 
 export function studentClassroomTemplateAoa(): string[][] {
   return [
     [...STUDENT_CLASSROOM_HEADERS],
-    ['10001', 'สมชาย', 'ใจดี', '15', '3', '2558', 'ชาย'],
+    ['10001', 'สมชาย', 'ใจดี', '15/3/2558', 'ชาย'],
   ];
 }
 
@@ -104,7 +98,7 @@ export function pickMeasureColumns(aoa: string[][]): string[][] {
 
 /**
  * Take a per-classroom AoA (STUDENT_CLASSROOM_HEADERS layout: id, ชื่อ, นามสกุล,
- * วันเกิด day/month/year, เพศ — no grade/room) and append the picked grade/room to
+ * วันเกิด (single cell), เพศ — no grade/room) and append the picked grade/room to
  * every data row, producing a full STUDENT_HEADERS AoA that parseStudentAoa reads.
  * The header row is normalized to STUDENT_HEADERS (parseStudentAoa ignores it).
  */
@@ -113,7 +107,8 @@ export function injectGradeRoom(aoa: string[][], grade: string, room: string): s
   const out: string[][] = [[...STUDENT_HEADERS]];
   for (let i = 1; i < aoa.length; i++) {
     const c = aoa[i];
-    out.push([c[0] ?? '', c[1] ?? '', c[2] ?? '', c[3] ?? '', c[4] ?? '', c[5] ?? '', c[6] ?? '', grade, room]);
+    // classroom layout: id, ชื่อ, นามสกุล, วันเกิด, เพศ → append grade/room
+    out.push([c[0] ?? '', c[1] ?? '', c[2] ?? '', c[3] ?? '', c[4] ?? '', grade, room]);
   }
   return out;
 }
@@ -136,11 +131,35 @@ export function pasteToAoa(text: string, header: readonly string[]): string[][] 
   return [[...header], ...body.map(split)];
 }
 
+/**
+ * Build a file-shaped measure AoA from pasted text, so paste flows through the
+ * exact same parser as an uploaded file (pickMeasureColumns → parseMeasureAoa).
+ *
+ * Upload tolerates a missing ชื่อ/นามสกุล column because pickMeasureColumns maps
+ * columns by header NAME. Paste must therefore carry a real header:
+ *  - If the pasted block already has a header row (non-numeric first cell), keep
+ *    it verbatim so the header-name mapping works exactly like upload.
+ *  - If it's headerless (data only), synthesize the header from the column count
+ *    (≤4 cols = no name → MEASURE_HEADERS; otherwise the 6-col roster layout).
+ */
+export function pasteMeasureToAoa(text: string): string[][] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+  if (!lines.length) return [];
+  const split = (line: string) =>
+    line.split(line.includes('\t') ? '\t' : ',').map((c) => c.trim());
+  const rows = lines.map(split);
+  // ids start with a digit; a non-numeric first cell means a header row was pasted
+  const headerLike = !/^\d/.test(rows[0][0] ?? '');
+  if (headerLike) return rows;
+  const cols = Math.max(...rows.map((r) => r.length));
+  const header = cols <= 4 ? [...MEASURE_HEADERS] : [...MEASURE_ROSTER_HEADERS];
+  return [header, ...rows];
+}
+
 export function studentsToAoa(students: Student[]): string[][] {
   const rows: string[][] = [[...STUDENT_HEADERS]];
   for (const s of students) {
-    const [dobDay, dobMonth, dobYear] = s.dob.split('/');
-    rows.push([s.id, s.firstName, s.lastName, dobDay ?? '', dobMonth ?? '', dobYear ?? '', s.gender, s.grade, s.room]);
+    rows.push([s.id, s.firstName, s.lastName, s.dob, s.gender, s.grade, s.room]);
   }
   return rows;
 }
@@ -164,16 +183,15 @@ export function gridRowsToAoa(rows: GridRow[]): string[][] {
   for (const r of rows) {
     const blank = !r.id.trim() && !r.firstName.trim() && !r.lastName.trim() && !r.gender.trim() && !r.dob.trim();
     if (blank) continue;
-    const [day = '', month = '', year = ''] = r.dob.trim() ? r.dob.split('/') : [];
-    aoa.push([r.id.trim(), r.firstName.trim(), r.lastName.trim(), day, month, year, r.gender.trim()]);
+    aoa.push([r.id.trim(), r.firstName.trim(), r.lastName.trim(), r.dob.trim(), r.gender.trim()]);
   }
   return aoa;
 }
 
 /**
  * Parse a pasted TSV/CSV block matching the Excel แม่แบบ column layout
- * (STUDENT_CLASSROOM_HEADERS): id, firstName, lastName, dob-day, dob-month,
- * dob-year(BE), gender. DOB columns 3-5 are joined into canonical D/M/YYYY.
+ * (STUDENT_CLASSROOM_HEADERS): id, firstName, lastName, วันเกิด (single cell), gender.
+ * The DOB cell is normalized via normalizeThaiDate.
  */
 export function parseClipboardGrid(text: string): GridRow[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -183,9 +201,9 @@ export function parseClipboardGrid(text: string): GridRow[] {
   const headerLike = !/^\d+$/.test(first[0] ?? '');
   const body = headerLike ? lines.slice(1) : lines;
   return body.map((line) => {
-    const [id = '', firstName = '', lastName = '', d = '', m = '', y = '', gender = ''] = cellsOf(line);
-    const dob = d && m && y ? `${+d}/${+m}/${y}` : '';
-    return { id, firstName, lastName, gender, dob };
+    const [id = '', firstName = '', lastName = '', dobCell = '', gender = ''] = cellsOf(line);
+    const norm = dobCell.trim() ? normalizeThaiDate(dobCell) : null;
+    return { id, firstName, lastName, gender, dob: norm ? norm.value : dobCell.trim() };
   });
 }
 
@@ -239,6 +257,15 @@ export function readXlsxToAoa(buf: ArrayBuffer): string[][] {
 // Parsers (pure over AOA; row numbers 1-based incl. header → first data = 2)
 // ---------------------------------------------------------------------------
 
+/**
+ * Shown when a pasted/imported row collapses into a single cell because the
+ * Tab delimiter was lost (e.g. copied from a rendered table/PDF, or the DOB's
+ * spaces got treated as separators). A real student id never contains spaces,
+ * so whitespace inside the id column is the tell-tale sign of misalignment.
+ */
+export const COL_MISALIGN_MSG =
+  'คอลัมน์ไม่ตรงกับแม่แบบ — คัดลอกจาก Excel โดยตรง (คั่นด้วย Tab) แล้ววางใหม่ หรือกรอกวันเกิดแบบ วว/ดด/ปปปป เช่น 2/10/2558';
+
 export function parseStudentAoa(aoa: string[][]): {
   rows: Student[];
   skipped: { row: number; reason: string }[];
@@ -250,10 +277,14 @@ export function parseStudentAoa(aoa: string[][]): {
   for (let i = 1; i < aoa.length; i++) {
     const rowNum = i + 1;
     const cells = aoa[i];
-    const [id, firstName, lastName, d, m, y, gender, grade, room] = cells.map((c) =>
+    const [id, firstName, lastName, dobRaw, gender, grade, room] = cells.map((c) =>
       (c ?? '').trim(),
     );
 
+    if (id && /\s/.test(id)) {
+      skipped.push({ row: rowNum, reason: COL_MISALIGN_MSG });
+      continue;
+    }
     if (!id) {
       skipped.push({ row: rowNum, reason: 'กรุณากรอกรหัสนักเรียน' });
       continue;
@@ -263,12 +294,16 @@ export function parseStudentAoa(aoa: string[][]): {
       continue;
     }
 
-    if (!d || !m || !y) {
-      skipped.push({ row: rowNum, reason: 'กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)' });
+    if (!dobRaw) {
+      skipped.push({ row: rowNum, reason: 'กรอกวันเกิด (วัน/เดือน/ปี พ.ศ.)' });
       continue;
     }
-
-    const dob = `${+d}/${+m}/${y}`;
+    const normDob = normalizeThaiDate(dobRaw);
+    if (!normDob) {
+      skipped.push({ row: rowNum, reason: 'อ่านวันเกิดไม่ได้ — ใช้รูปแบบ วัน/เดือน/ปีพ.ศ.' });
+      continue;
+    }
+    const dob = normDob.value;
     const dobErr = validateThaiDate(dob, true);
     if (dobErr) {
       skipped.push({ row: rowNum, reason: dobErr });
@@ -393,17 +428,21 @@ export function parseStudentImport(
     const id = (cells[0] ?? '').trim();
     const firstName = (cells[1] ?? '').trim();
     const lastName = (cells[2] ?? '').trim();
-    const rawDay = (cells[3] ?? '').trim();
-    const rawMonth = (cells[4] ?? '').trim();
-    const rawYear = (cells[5] ?? '').trim();
-    const genderRaw = (cells[6] ?? '').trim();
-    // rawDob is the joined value shown in the preview (for hasDateError detection)
-    const rawDob = rawDay && rawMonth && rawYear ? `${+rawDay}/${+rawMonth}/${rawYear}` : '';
+    const dobRaw = (cells[3] ?? '').trim();
+    const genderRaw = (cells[4] ?? '').trim();
+    const rawDob = dobRaw;
 
     const issues: { message: string; severity: 'error' | 'warn' }[] = [];
 
+    // A real id has no spaces; whitespace inside it means the row collapsed
+    // into one cell (Tab delimiter lost). Flag once and skip the noisy
+    // downstream name/dob/gender errors that the collapse would trigger.
+    const misaligned = !!id && /\s/.test(id);
+
     // id checks
-    if (!id) {
+    if (misaligned) {
+      issues.push({ message: COL_MISALIGN_MSG, severity: 'error' });
+    } else if (!id) {
       issues.push({ message: 'ไม่มีรหัสนักเรียน', severity: 'error' });
     } else if (!/^\d+$/.test(id)) {
       issues.push({ message: 'รหัสนักเรียนต้องเป็นตัวเลข', severity: 'error' });
@@ -411,45 +450,40 @@ export function parseStudentImport(
       issues.push({ message: 'รหัสซ้ำกันในไฟล์', severity: 'error' });
     }
 
-    // name checks
-    if (!firstName) issues.push({ message: 'ไม่มีชื่อ', severity: 'error' });
-    if (!lastName) issues.push({ message: 'ไม่มีนามสกุล', severity: 'error' });
-
-    // dob: use override if present, else build from three numeric columns
-    const overrideDob = overrides?.get(rowNum)?.dob;
     let dob = '';
-    if (overrideDob !== undefined) {
-      // Override supplies full canonical D/M/YYYY — normalize and validate
-      const normDob = normalizeThaiDate(overrideDob);
-      if (!normDob) {
-        issues.push({ message: 'อ่านวันเกิดไม่ได้ — แก้ไขในช่องด้านล่าง หรือใช้รูปแบบ วัน/เดือน/ปีพ.ศ.', severity: 'error' });
-      } else {
-        dob = normDob.value;
-        if (normDob.converted) issues.push({ message: 'ปรับรูปแบบวันที่ให้อัตโนมัติ', severity: 'warn' });
-        const dobErr = validateThaiDate(dob, true, periodYear);
-        if (dobErr) issues.push({ message: dobErr, severity: 'error' });
-      }
-    } else {
-      // Three-column DOB
-      if (!rawDay || !rawMonth || !rawYear) {
-        issues.push({ message: 'กรอกวันเกิดให้ครบ (วัน/เดือน/ปี พ.ศ.)', severity: 'error' });
-      } else {
-        dob = `${+rawDay}/${+rawMonth}/${rawYear}`;
-        const dobErr = validateThaiDate(dob, true, periodYear);
-        if (dobErr) issues.push({ message: dobErr, severity: 'error' });
-      }
-    }
-
-    // gender check
-    const validGenders: Gender[] = ['ชาย', 'หญิง'];
     let resolvedGender: Gender = 'ชาย';
-    if (!validGenders.includes(genderRaw as Gender)) {
-      issues.push({
-        message: 'เพศไม่ถูกต้อง ใช้ค่าเริ่มต้น "ชาย"',
-        severity: 'warn',
-      });
-    } else {
-      resolvedGender = genderRaw as Gender;
+    if (!misaligned) {
+      // name checks
+      if (!firstName) issues.push({ message: 'ไม่มีชื่อ', severity: 'error' });
+      if (!lastName) issues.push({ message: 'ไม่มีนามสกุล', severity: 'error' });
+
+      // dob: use override if present, else the single DOB column — both normalized
+      const overrideDob = overrides?.get(rowNum)?.dob;
+      const dobInput = overrideDob !== undefined ? overrideDob : dobRaw;
+      if (!dobInput.trim()) {
+        issues.push({ message: 'กรอกวันเกิด (วัน/เดือน/ปี พ.ศ.)', severity: 'error' });
+      } else {
+        const normDob = normalizeThaiDate(dobInput);
+        if (!normDob) {
+          issues.push({ message: 'อ่านวันเกิดไม่ได้ — แก้ไขในช่องด้านล่าง หรือใช้รูปแบบ วัน/เดือน/ปีพ.ศ.', severity: 'error' });
+        } else {
+          dob = normDob.value;
+          if (normDob.converted) issues.push({ message: 'ปรับรูปแบบวันที่ให้อัตโนมัติ', severity: 'warn' });
+          const dobErr = validateThaiDate(dob, true, periodYear);
+          if (dobErr) issues.push({ message: dobErr, severity: 'error' });
+        }
+      }
+
+      // gender check
+      const validGenders: Gender[] = ['ชาย', 'หญิง'];
+      if (!validGenders.includes(genderRaw as Gender)) {
+        issues.push({
+          message: 'เพศไม่ถูกต้อง ใช้ค่าเริ่มต้น "ชาย"',
+          severity: 'warn',
+        });
+      } else {
+        resolvedGender = genderRaw as Gender;
+      }
     }
 
     const hasError = issues.some((is) => is.severity === 'error');
@@ -472,7 +506,7 @@ export function parseStudentImport(
       if (existingIds.has(id)) {
         status = 'update';
         issues.push({
-          message: 'มีรหัสนี้อยู่แล้ว — จะอัปเดตข้อมูลเดิม',
+          message: 'มีรหัสนี้อยู่แล้ว',
           severity: 'warn',
         });
       } else {
@@ -483,7 +517,7 @@ export function parseStudentImport(
     const hasDateError = issues.some(
       (is) => is.severity === 'error' && (
         is.message.includes('วันเกิดไม่ได้') ||
-        is.message.includes('กรอกวันเกิดให้ครบ') ||
+        is.message.includes('กรอกวันเกิด') ||
         is.message.includes('ปีเกิด') ||
         is.message.includes('ปีพ.ศ.')
       ),
@@ -665,7 +699,14 @@ export function mergeStudents(
   for (const s of rows) {
     const existing = store.students.value.find((x) => x.id === s.id);
     if (existing) {
-      store.updateStudent(s.id, s);
+      // Update personal fields only — never relocate an existing student to the
+      // import's target grade/room. Re-importing a roster must not move anyone.
+      store.updateStudent(s.id, {
+        firstName: s.firstName,
+        lastName: s.lastName,
+        dob: s.dob,
+        gender: s.gender,
+      });
       updated++;
     } else {
       store.addStudent(s);

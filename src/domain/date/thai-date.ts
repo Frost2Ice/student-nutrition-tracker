@@ -10,12 +10,17 @@ const THAI_MONTH_ABBR: Record<string, number> = {
   'ก.ค.': 7, 'ส.ค.': 8, 'ก.ย.': 9, 'ต.ค.': 10, 'พ.ย.': 11, 'ธ.ค.': 12,
 };
 
-// Resolve year: 4-digit ≥2400 = BE; 4-digit 1900–2200 = CE → +543; 2-digit = CE 20xx → +543
+// Resolve year: 4-digit ≥2400 = BE; 4-digit 1900–2200 = CE → +543; 2-digit = BE short (65 → 2565)
 function resolveYearToBE(y: number): { year: number; wasConverted: boolean } {
   if (y >= 2400) return { year: y, wasConverted: false };
   if (y >= 100 && y <= 2200) return { year: y + 543, wasConverted: true };
-  if (y >= 0 && y < 100) return { year: 2000 + y + 543, wasConverted: true };
+  if (y >= 0 && y < 100) return { year: 2500 + y, wasConverted: true }; // 2-digit → BE short (65 → 2565)
   return { year: y, wasConverted: false };
+}
+
+// Thai digit → Arabic digit
+function normalizeDigits(s: string): string {
+  return s.replace(/[๐-๙]/g, (ch) => String('๐๑๒๓๔๕๖๗๘๙'.indexOf(ch)));
 }
 
 function buildAndValidate(
@@ -53,8 +58,8 @@ export function normalizeThaiDate(
     return { value: formatThaiDate(d), converted: true };
   }
 
-  // String handling
-  const s = input.trim();
+  // String handling — normalize Thai digits and collapse whitespace first
+  const s = normalizeDigits(input).trim().replace(/\s+/g, ' ');
   if (!s) return null;
 
   // Try Thai month names (full and abbreviated): pattern "D <month> YYYY"

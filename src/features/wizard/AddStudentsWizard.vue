@@ -190,10 +190,12 @@ const canSave = computed(() => parsed.value.length > 0 && !result.value);
         rows="4"
         placeholder="คัดลอกแถวข้อมูลจาก Excel (รหัส ชื่อ นามสกุล วัน เดือน ปี เพศ) แล้ววางที่นี่"
       ></textarea>
-      <button class="btn j" :disabled="!pasteText.trim()" @click="onPaste">ตรวจสอบข้อมูลที่วาง</button>
 
       <div v-if="fileErr" class="callout bad" style="margin-top: var(--s4)">{{ fileErr }}</div>
-      <div style="margin-top: var(--s4)"><button class="btn quiet" @click="step = 0">← ย้อนกลับ</button></div>
+      <div class="wiz-foot-stack">
+        <button class="btn lg" @click="step = 0">← ย้อนกลับ</button>
+        <button class="btn j lg" :disabled="!pasteText.trim()" @click="onPaste">ตรวจสอบข้อมูลที่วาง</button>
+      </div>
     </div>
 
     <!-- step 2: review + save -->
@@ -215,9 +217,8 @@ const canSave = computed(() => parsed.value.length > 0 && !result.value);
           <div class="ct">⚠️ ข้ามไป {{ skipped.length }} แถว</div>
           <ul style="margin: 0; padding-left: 1.2em"><li v-for="(sk, i) in skipped" :key="i">แถว {{ sk.row }}: {{ sk.reason }}</li></ul>
         </div>
-        <div style="margin-top: var(--s5); display: flex; gap: var(--s3); flex-wrap: wrap">
-          <button class="btn quiet" @click="step = 1">← เลือกไฟล์ใหม่</button>
-          <span style="flex: 1"></span>
+        <div class="wiz-foot-stack">
+          <button class="btn lg" @click="step = 1">← เลือกไฟล์ใหม่</button>
           <button class="btn j lg" :disabled="!canSave" @click="save">บันทึก {{ parsed.length }} รายชื่อ</button>
         </div>
       </div>

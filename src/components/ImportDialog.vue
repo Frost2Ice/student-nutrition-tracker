@@ -15,7 +15,9 @@ import {
   mergeMeasures,
   gridRowsToAoa,
   parseClipboardGrid,
+  hasLegacyDobColumns,
 } from '../domain/transfer/xlsx';
+import { normalizeThaiDate } from '../domain/date/thai-date';
 import type {
   ImportPreviewRow,
   MeasureImportPreviewRow,
@@ -213,7 +215,12 @@ function loadExcelIntoGrid(file: File) {
   fileName.value = file.name;
   const reader = new FileReader();
   reader.onload = () => {
+    dobFileErr.value = '';
     const aoa = readXlsxToAoa(reader.result as ArrayBuffer);
+    if (aoa.length && hasLegacyDobColumns(aoa[0])) {
+      dobFileErr.value = 'ไฟล์รูปแบบเก่า (วันเกิดแยก 3 ช่อง) — ดาวน์โหลดแม่แบบใหม่ที่ใช้ช่อง "วันเกิด" ช่องเดียว';
+      return;
+    }
     const rows: GridRow[] = [];
     for (let i = 1; i < aoa.length; i++) {
       const c = aoa[i];
@@ -221,9 +228,10 @@ function loadExcelIntoGrid(file: File) {
       const fn = (c[1] ?? '').trim();
       const ln = (c[2] ?? '').trim();
       if (!id && !fn && !ln) continue;
-      const d = (c[3] ?? '').trim(), m = (c[4] ?? '').trim(), y = (c[5] ?? '').trim();
-      const g = (c[6] ?? '').trim();
-      rows.push({ id, firstName: fn, lastName: ln, gender: g === 'ชาย' || g === 'หญิง' ? g : '', dob: d && m && y ? `${+d}/${+m}/${y}` : '' });
+      const dobCell = (c[3] ?? '').trim();
+      const g = (c[4] ?? '').trim();
+      const norm = dobCell ? normalizeThaiDate(dobCell) : null;
+      rows.push({ id, firstName: fn, lastName: ln, gender: g === 'ชาย' || g === 'หญิง' ? g : '', dob: norm ? norm.value : dobCell });
     }
     gridRows.value = rows.length ? rows : [blankRow()];
     stage.value = 'grid';
@@ -248,7 +256,7 @@ function downloadTemplate() {
     downloadBlob(aoaToXlsxBlob(measureTemplateAoa(), 'ผลการวัด'), 'แม่แบบผลการวัด.xlsx');
   } else {
     downloadBlob(
-      aoaToXlsxBlob(studentClassroomTemplateAoa(), 'รายชื่อนักเรียน'),
+      aoaToXlsxBlob(studentClassroomTemplateAoa(), 'รายชื่อนักเรียน', [0, 3]),
       `แม่แบบรายชื่อ ${roomLabel.value || 'นักเรียน'}.xlsx`,
     );
   }
@@ -286,6 +294,7 @@ const gridRows = ref<GridRow[]>([]);
 
 const dragging = ref(false);
 const fileName = ref('');
+const dobFileErr = ref('');
 
 function processFile(file: File) {
   fileName.value = file.name;
@@ -528,6 +537,7 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
           <div class="dz-main">ลากไฟล์ .xlsx มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
           <div class="dz-hint">ข้อมูลจะถูกนำมาใส่ตารางให้ตรวจทานก่อนเพิ่ม</div>
         </label>
+        <p v-if="dobFileErr" class="dz-err">{{ dobFileErr }}</p>
       </div>
 
       <div class="xl-or">หรือ</div>
@@ -537,7 +547,7 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
         <div class="xl-head"><span class="xl-badge">2</span> วางข้อมูลจาก Excel</div>
         <p class="xl-sub">
           ใช้คอลัมน์เรียงตามแม่แบบ เริ่มจาก <b>รหัสนักเรียน</b> เป็นคอลัมน์แรก:
-          รหัส · ชื่อ · นามสกุล · วัน · เดือน · ปี(พ.ศ.) · เพศ
+          รหัส · ชื่อ · นามสกุล · วันเกิด · เพศ
         </p>
         <ol class="xl-steps">
           <li>ในไฟล์ Excel <b>ลากคลุมแถวข้อมูล</b> ที่ต้องการ (คลุมทุกคอลัมน์ตั้งแต่รหัสนักเรียน) จะคลุมหัวตารางมาด้วยก็ได้</li>
@@ -808,6 +818,7 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
 .dz-or { font-size: 12.5px; color: var(--ink-muted); }
 .dz-btn { margin-top: 2px; }
 .dz-hint { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+.dz-err { margin-top: var(--s2); color: var(--bad); font-size: 0.85rem; }
 
 /* preview header */
 .prev-head { margin-bottom: var(--s4); }
@@ -837,10 +848,10 @@ const measureYearMax = computed(() => +(props.year ?? data.period.year) + 1);
 .grid tr.r-ok { background: var(--good-tint); }
 .grid tr.r-update { background: var(--brand-tint); }
 .grid tr.r-error { background: var(--bad-tint); }
-.gcell { width: 100%; min-width: 90px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; background: var(--surface); }
+.gcell { width: 100%; min-width: 90px; height: 42px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-size: 15px; background: var(--surface); }
 .gcell:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); padding: 8px 14px; cursor: pointer; font: inherit; color: var(--ink-muted); }
+.seg button { border: 0; background: var(--surface); min-width: 44px; height: 42px; padding: 0 14px; cursor: pointer; font-size: 15px; color: var(--ink-muted); }
 .seg button.on { background: var(--brand); color: #fff; font-weight: 700; }
 .gstat .pill { font-size: 13px; }
 .grm { border: 0; background: transparent; cursor: pointer; color: var(--ink-muted); font-size: 16px; padding: 6px; }

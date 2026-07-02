@@ -108,6 +108,9 @@
 /* wizard footer */
 .wiz-foot { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s6); }
 .wiz-foot .spacer { flex: 1; }
+/* stacked footer: back (outlined) on top, primary action on the bottom */
+.wiz-foot-stack { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s5); }
+.wiz-foot-stack .btn { width: 100%; }
 
 /* callout boxes */
 .callout { border-radius: var(--r); padding: var(--s4) var(--s5); margin: var(--s4) 0; font-size: 15.5px; }
