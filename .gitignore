@@ -10,3 +10,10 @@ dist/
 .claude/
 .kiro/
 docs/git-commits/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
